@@ -289,6 +289,8 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
       'STUDENT NAME',
       'TEST 1',
       'TEST 2',
+      'TEST 3',
+      'TEST 4',
       'EXAM',
       'ATTENDANCE'
     ];
@@ -296,8 +298,8 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     // Create sample data
     const data = [
       headers,
-      ['STD001', 'John Doe', 75, 80, 85, 90],
-      ['STD002', 'Jane Smith', 82, 78, 88, 95]
+      ['STD001', 'John Doe', 75, 80, 60, 90, 85, 90],
+      ['STD002', 'Jane Smith', 82, 78, 71, 83, 88, 95]
     ];
     
     // Create worksheet
