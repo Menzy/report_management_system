@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Menu, X } from 'lucide-react';
 import { Button } from '../ui/button';
+import { useNavigate } from 'react-router-dom';
 
-const Navbar = () => {
+const Navbar = ({ onSignIn, onSignUp }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -66,20 +67,22 @@ const Navbar = () => {
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4">
             <Button
-              variant="ghost"
-              className={`${isScrolled 
-                ? 'text-gray-700 hover:text-blue-600 hover:bg-blue-50' 
-                : 'text-gray-800 hover:text-blue-700 hover:bg-blue-100'}`}
+              variant={isScrolled ? 'primary' : 'primary'}
+              className={`${!isScrolled 
+                ? 'bg-blue-600 text-white hover:bg-blue-700 border-0' 
+                : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              onClick={onSignUp}
             >
-              Log In
+              Sign Up Free
             </Button>
             <Button
               variant={isScrolled ? 'primary' : 'primary'}
               className={`${!isScrolled 
                 ? 'bg-blue-600 text-white hover:bg-blue-700 border-0' 
                 : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              onClick={onSignIn}
             >
-              Sign Up Free
+              Sign In
             </Button>
           </div>
 
@@ -120,12 +123,26 @@ const Navbar = () => {
                     {link.name}
                   </a>
                 ))}
-                <div className="pt-4 border-t border-gray-100 flex flex-col space-y-4">
-                  <Button variant="ghost" className="justify-center">
-                    Log In
-                  </Button>
-                  <Button variant="primary" className="justify-center">
+                <div className="pt-4 border-t border-gray-100 flex flex-row space-x-4">
+                  <Button 
+                    variant="primary" 
+                    className="justify-center w-1/2"
+                    onClick={() => {
+                      onSignUp();
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
                     Sign Up Free
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    className="justify-center w-1/2"
+                    onClick={() => {
+                      onSignIn();
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Sign In
                   </Button>
                 </div>
               </nav>

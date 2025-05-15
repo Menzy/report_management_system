@@ -4,7 +4,7 @@ import { GraduationCap, CheckCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useInView } from 'react-intersection-observer';
 
-const HeroSection = () => {
+const HeroSection = ({ onSignUp }) => {
   const [ref, inView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
@@ -82,7 +82,7 @@ const HeroSection = () => {
             </motion.p>
             
             <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button variant="primary" size="lg" className="font-medium">
+              <Button variant="primary" size="lg" className="font-medium" onClick={onSignUp}>
                 Get Started Free
               </Button>
               <Button variant="outline" size="lg" className="font-medium">

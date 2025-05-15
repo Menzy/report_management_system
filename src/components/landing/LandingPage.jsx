@@ -8,11 +8,11 @@ import TestimonialsSection from './TestimonialsSection';
 import CTASection from './CTASection';
 import Footer from './Footer';
 
-const LandingPage = () => {
+const LandingPage = ({ onSignIn, onSignUp }) => {
   return (
     <div className="min-h-screen">
-      <Navbar />
-      <HeroSection />
+      <Navbar onSignIn={onSignIn} onSignUp={onSignUp} />
+      <HeroSection onSignUp={onSignUp} />
       <FeaturesSection />
       <HowItWorksSection />
       <PricingSection />
