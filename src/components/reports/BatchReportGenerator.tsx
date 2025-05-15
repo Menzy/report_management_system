@@ -287,8 +287,8 @@ const BatchReportGenerator = ({ school, classes }) => {
                 ${report.subjects.map((subject, index) => `
                   <tr>
                     <td>${subject.subject_name}</td>
-                    <td align="center">${subject.continuous_assessment}</td>
-                    <td align="center">${subject.exam_score}</td>
+                    <td align="center">${subject.continuous_assessment * 0.5}</td>
+                    <td align="center">${subject.exam_score * 0.5}</td>
                     <td align="center"><strong>${subject.total_score}</strong></td>
                     <td align="center">${subject.grade}</td>
                     <td align="center">${subject.position}</td>
