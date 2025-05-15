@@ -56,6 +56,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     setUploadStatus('validating');
     setValidationErrors([]);
     
+    // Reset any previous data
+    setPreviewData([]);
+    
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -132,8 +135,8 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           student_id: studentId.toString(),
           name: studentName.toString(),
           scores: {},
-          term: row['TERM'] || selectedTerm,
-          academic_year: row['ACADEMIC YEAR'] || academicYear
+          term: row['TERM'] || selectedTerm, // Use the current selectedTerm if not in file
+          academic_year: row['ACADEMIC YEAR'] || academicYear // Use the current academicYear if not in file
         };
         
         // Process all possible assessment columns
@@ -209,6 +212,15 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     
     setUploadStatus('uploading');
     setUploadProgress(0);
+    
+    // Update all preview data with the current term and academic year
+    // This ensures that any changes to the term/year dropdowns are reflected
+    const updatedPreviewData = previewData.map(record => ({
+      ...record,
+      term: selectedTerm,
+      academic_year: academicYear
+    }));
+    setPreviewData(updatedPreviewData);
     
     try {
       // Process each student record
@@ -290,17 +302,23 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           .eq('student_id', studentId)
           .eq('subject_id', subject.id);
         
-        // Insert new scores - without term and academic_year until database schema is updated
-        const scoreInserts = Object.entries(record.scores).map(([assessmentType, score]) => ({
-          student_id: studentId,
-          subject_id: subject.id,
-          assessment_type: assessmentType,
-          score: score,
-          max_score: 100,
-          // term and academic_year fields are commented out until database schema is updated
-          term: record.term,
-          academic_year: record.academic_year
-        }));
+        // Insert new scores with term and academic year
+        console.log('Using term:', selectedTerm);
+        console.log('Using academic year:', academicYear);
+        
+        const scoreInserts = Object.entries(record.scores).map(([assessmentType, score]) => {
+          const insertData = {
+            student_id: studentId,
+            subject_id: subject.id,
+            assessment_type: assessmentType,
+            score: score,
+            max_score: 100,
+            term: selectedTerm, // Always use the currently selected term
+            academic_year: academicYear // Always use the currently selected academic year
+          };
+          console.log('Inserting score with data:', insertData);
+          return insertData;
+        });
         
         if (scoreInserts.length > 0) {
           const { error: scoresError } = await supabase
@@ -594,7 +612,10 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
                 <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
                 <select
                   value={selectedTerm}
-                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    console.log('Term changed to:', e.target.value);
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
                   {TERMS.map((term) => (
