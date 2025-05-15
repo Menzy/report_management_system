@@ -63,6 +63,8 @@ export type Score = {
   score: number;
   max_score: number;
   created_at: string;
+  term?: string;
+  academic_year?: string;
 };
 
 export type StudentRecord = {
@@ -72,6 +74,25 @@ export type StudentRecord = {
     [assessmentType: string]: number;
   };
   attendance?: number;
+  term?: string;
+  academic_year?: string;
 };
 
 export const ASSESSMENT_TYPES = ['TEST 1', 'TEST 2', 'EXAM', 'CA', 'QUIZ', 'MIDTERM', 'FINAL'];
+
+export const TERMS = ['FIRST TERM', 'SECOND TERM', 'THIRD TERM'];
+
+// Helper function to get the current academic year in format '2024/2025'
+export const getCurrentAcademicYear = (): string => {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const month = currentDate.getMonth(); // 0-indexed, 0 = January
+  
+  // If we're in the second half of the year (July onwards), academic year is current/next
+  // Otherwise it's previous/current
+  if (month >= 6) { // July onwards
+    return `${currentYear}/${currentYear + 1}`;
+  } else {
+    return `${currentYear - 1}/${currentYear}`;
+  }
+};

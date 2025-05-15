@@ -1,13 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { supabase, Class, Subject, StudentRecord, ASSESSMENT_TYPES } from '../../lib/supabase';
+import { supabase, Class, Subject, StudentRecord, ASSESSMENT_TYPES, TERMS, getCurrentAcademicYear } from '../../lib/supabase';
 import { ArrowLeft, Upload, FileSpreadsheet, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import PreviousUploads from './PreviousUploads';
 
 type DataUploadProps = {
   schoolId: string;
   classItem: Class;
   subject: Subject;
   onBack: () => void;
+  onDataChanged?: () => void;
 };
 
 type ValidationError = {
@@ -16,13 +18,15 @@ type ValidationError = {
   message: string;
 };
 
-const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack }) => {
+const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack, onDataChanged }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<StudentRecord[]>([]);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'validating' | 'uploading' | 'success' | 'error'>('idle');
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedTerm, setSelectedTerm] = useState<string>(TERMS[0]);
+  const [academicYear, setAcademicYear] = useState<string>(getCurrentAcademicYear());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +131,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
         const record: StudentRecord = {
           student_id: studentId.toString(),
           name: studentName.toString(),
-          scores: {}
+          scores: {},
+          term: row['TERM'] || selectedTerm,
+          academic_year: row['ACADEMIC YEAR'] || academicYear
         };
         
         // Process all possible assessment columns
@@ -209,14 +215,13 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
       for (let i = 0; i < previewData.length; i++) {
         const record = previewData[i];
         
-        // Check if student exists - using select() instead of single() to avoid errors
+        // Check if student exists in this school (regardless of class)
         let studentId: string;
         const { data: existingStudents, error: lookupError } = await supabase
           .from('students')
-          .select('id')
+          .select('id, class_id')
           .eq('student_id', record.student_id)
-          .eq('school_id', schoolId)
-          .eq('class_id', classItem.id);
+          .eq('school_id', schoolId);
         
         if (lookupError) {
           console.error('Error looking up student:', lookupError);
@@ -224,23 +229,58 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
         }
         
         if (existingStudents && existingStudents.length > 0) {
-          // Student exists
+          // Student exists in this school
           studentId = existingStudents[0].id;
+          
+          // Update the student's class if needed
+          const existingClassId = existingStudents[0].class_id as string;
+          if (existingClassId !== classItem.id) {
+            const { error: updateError } = await supabase
+              .from('students')
+              .update({ class_id: classItem.id, name: record.name })
+              .eq('id', studentId);
+              
+            if (updateError) {
+              console.error('Error updating student class:', updateError);
+              throw updateError;
+            }
+          }
         } else {
           // Create new student
-          const { data: newStudent, error: studentError } = await supabase
-            .from('students')
-            .insert({
-              student_id: record.student_id,
-              name: record.name,
-              class_id: classItem.id,
-              school_id: schoolId
-            })
-            .select('id')
-            .single();
-          
-          if (studentError) throw studentError;
-          studentId = newStudent.id;
+          try {
+            const { data: newStudent, error: studentError } = await supabase
+              .from('students')
+              .insert({
+                student_id: record.student_id,
+                name: record.name,
+                class_id: classItem.id,
+                school_id: schoolId
+              })
+              .select('id')
+              .single();
+            
+            if (studentError) throw studentError;
+            studentId = newStudent.id;
+          } catch (error: any) {
+            // If we get a duplicate key error, try to fetch the student again
+            // This handles race conditions in case another upload just created this student
+            if (error.code === '23505') {
+              const { data: retryStudents, error: retryError } = await supabase
+                .from('students')
+                .select('id')
+                .eq('student_id', record.student_id)
+                .eq('school_id', schoolId);
+                
+              if (retryError) throw retryError;
+              if (retryStudents && retryStudents.length > 0) {
+                studentId = retryStudents[0].id;
+              } else {
+                throw error; // Re-throw if we still can't find the student
+              }
+            } else {
+              throw error; // Re-throw other errors
+            }
+          }
         }
         
         // Delete existing scores for this student and subject
@@ -250,13 +290,16 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           .eq('student_id', studentId)
           .eq('subject_id', subject.id);
         
-        // Insert new scores
+        // Insert new scores - without term and academic_year until database schema is updated
         const scoreInserts = Object.entries(record.scores).map(([assessmentType, score]) => ({
           student_id: studentId,
           subject_id: subject.id,
           assessment_type: assessmentType,
           score: score,
-          max_score: 100
+          max_score: 100,
+          // term and academic_year fields are commented out until database schema is updated
+          term: record.term,
+          academic_year: record.academic_year
         }));
         
         if (scoreInserts.length > 0) {
@@ -272,6 +315,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
       }
       
       setUploadStatus('success');
+      if (onDataChanged) {
+        onDataChanged(); // Trigger data refresh after successful upload
+      }
     } catch (error) {
       console.error('Error uploading data:', error);
       setErrorMessage('Failed to upload data. Please try again.');
@@ -287,12 +333,10 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     const headers = [
       'STUDENT REGISTER ID',
       'STUDENT NAME',
-      'TEST 1',
-      'TEST 2',
-      'TEST 3',
-      'TEST 4',
-      'EXAM',
-      'ATTENDANCE'
+      ...ASSESSMENT_TYPES,
+      'ATTENDANCE',
+      'TERM',
+      'ACADEMIC YEAR'
     ];
     
     // Create sample data
@@ -321,6 +365,13 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDataChanged = () => {
+    // Notify parent component that data has changed
+    if (onDataChanged) {
+      onDataChanged();
     }
   };
 
@@ -537,6 +588,34 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
             </div>
           )}
 
+          <div className="mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                <select
+                  value={selectedTerm}
+                  onChange={(e) => setSelectedTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {TERMS.map((term) => (
+                    <option key={term} value={term}>{term}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  placeholder="e.g. 2024/2025"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Format: YYYY/YYYY (e.g. 2024/2025)</p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end space-x-4">
             <button
               onClick={onBack}
@@ -559,6 +638,15 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           </div>
         </>
       )}
+      
+      <PreviousUploads 
+        schoolId={schoolId}
+        classItem={classItem}
+        subject={subject}
+        onDataChanged={handleDataChanged}
+        selectedTerm={selectedTerm}
+        academicYear={academicYear}
+      />
     </div>
   );
 };
