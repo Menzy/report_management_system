@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, Class, Subject } from '../../lib/supabase';
-import { Plus, Trash2, ArrowLeft, FileSpreadsheet, Upload, X, Pen, Eye, CheckCircle } from 'lucide-react';
-import DataUpload from './DataUpload';
+import { Plus, Trash2, ArrowLeft, FileSpreadsheet, X, Pen, Eye, CheckCircle } from 'lucide-react';
+import PreviousUploads from './PreviousUploads';
 
 type SubjectManagementProps = {
   schoolId: string;
@@ -18,26 +18,26 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [editingSubject, setEditingSubject] = useState<{id: string, name: string} | null>(null);
 
+  const fetchSubjects = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('subjects')
+        .select('*')
+        .eq('class_id', classItem.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setSubjects(data as Subject[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load subjects');
+      console.error('Error fetching subjects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchSubjects = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('subjects')
-          .select('*')
-          .eq('class_id', classItem.id)
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-        setSubjects(data as Subject[]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load subjects');
-        console.error('Error fetching subjects:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchSubjects();
   }, [classItem.id]);
 
@@ -83,17 +83,29 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
   };
 
   const handleDeleteSubject = async (subjectId: string) => {
-    if (!confirm('Are you sure you want to delete this subject? This will also delete all associated scores.')) {
+    if (!confirm('Are you sure you want to delete this subject and all associated scores? This action cannot be undone.')) {
       return;
     }
-
+    
     try {
-      const { error } = await supabase
+      // First, delete all scores associated with this subject
+      const { error: scoresError } = await supabase
+        .from('scores')
+        .delete()
+        .eq('subject_id', subjectId);
+
+      if (scoresError) {
+        console.error('Error deleting associated scores:', scoresError);
+        throw scoresError;
+      }
+      
+      // Then delete the subject itself
+      const { error: subjectError } = await supabase
         .from('subjects')
         .delete()
         .eq('id', subjectId);
 
-      if (error) throw error;
+      if (subjectError) throw subjectError;
       
       setSubjects(subjects.filter(s => s.id !== subjectId));
       if (selectedSubject?.id === subjectId) {
@@ -147,10 +159,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
 
   if (selectedSubject) {
     return (
-      <DataUpload 
+      <PreviousUploads 
         schoolId={schoolId}
         classItem={classItem}
         subject={selectedSubject}
+        onDataChanged={() => fetchSubjects()}
         onBack={handleBackToSubjects}
       />
     );

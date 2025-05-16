@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, Class, Subject, TERMS } from '../../lib/supabase';
-import { Trash2, Edit2, Save, X, AlertCircle, RefreshCw, Download } from 'lucide-react';
+import { AlertCircle, RefreshCw, Download, Trash2, Upload, ArrowLeft } from 'lucide-react';
+import StudentScoresTable from './StudentScoresTable';
+import DataUpload from './DataUpload';
+import Modal from '../ui/Modal';
 
 type PreviousUploadsProps = {
   schoolId: string;
   classItem: Class;
   subject: Subject;
   onDataChanged: () => void;
+  onBack?: () => void;
   selectedTerm?: string;
   academicYear?: string;
 };
@@ -29,6 +33,7 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
   classItem, 
   subject,
   onDataChanged,
+  onBack,
   selectedTerm,
   academicYear
 }) => {
@@ -46,7 +51,9 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
   const [availableTerms, setAvailableTerms] = useState<string[]>([]);
   const [availableAcademicYears, setAvailableAcademicYears] = useState<string[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<StudentData[]>([]);
-
+  const [groupedData, setGroupedData] = useState<{title: string; students: StudentData[]}[]>([]);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  
   useEffect(() => {
     fetchStudentData();
   }, [schoolId, classItem.id, subject.id]);
@@ -61,8 +68,12 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
     // Apply filters whenever filter states or students change
     if (students.length > 0) {
       applyFilters();
+      // Generate grouped data tables
+      const grouped = groupStudentsByFilter();
+      setGroupedData(grouped);
     } else {
       setFilteredStudents([]);
+      setGroupedData([]);
     }
   }, [filterTerm, filterAcademicYear, students]);
   
@@ -161,33 +172,155 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
     setEditData({});
   };
 
+  // Function to group students by term and/or academic year
+  const groupStudentsByFilter = () => {
+    console.log('Grouping students - Term:', filterTerm, 'Academic Year:', filterAcademicYear);
+    console.log('Total students before filtering:', students.length);
+    
+    // Start with all students
+    let filtered = [...students];
+    const groupedData: {
+      title: string;
+      students: StudentData[];
+    }[] = [];
+    
+    // Case 1: Specific term & specific year - single table
+    if (filterTerm && filterAcademicYear) {
+      const studentsWithFilteredScores = filtered.map(student => {
+        return {
+          ...student,
+          scores: student.scores.filter(score => 
+            score.term === filterTerm && 
+            score.academic_year === filterAcademicYear
+          )
+        };
+      }).filter(student => student.scores.length > 0);
+      
+      if (studentsWithFilteredScores.length > 0) {
+        groupedData.push({
+          title: `${filterTerm} - ${filterAcademicYear}`,
+          students: studentsWithFilteredScores
+        });
+      }
+    }
+    // Case 2: Specific term & all years - group by academic year
+    else if (filterTerm && !filterAcademicYear) {
+      // Get all unique academic years
+      const uniqueYears = Array.from(new Set(
+        filtered.flatMap(student => 
+          student.scores
+            .filter(score => score.term === filterTerm)
+            .map(score => score.academic_year)
+        ).filter(Boolean)
+      )).sort();
+      
+      // Create a table for each academic year
+      uniqueYears.forEach(year => {
+        const studentsForYear = filtered.map(student => {
+          return {
+            ...student,
+            scores: student.scores.filter(score => 
+              score.term === filterTerm && 
+              score.academic_year === year
+            )
+          };
+        }).filter(student => student.scores.length > 0);
+        
+        if (studentsForYear.length > 0) {
+          groupedData.push({
+            title: `${filterTerm} - ${year}`,
+            students: studentsForYear
+          });
+        }
+      });
+    }
+    // Case 3: All terms & specific year - group by term
+    else if (!filterTerm && filterAcademicYear) {
+      // Get all unique terms
+      const uniqueTerms = TERMS;
+      
+      // Create a table for each term
+      uniqueTerms.forEach(term => {
+        const studentsForTerm = filtered.map(student => {
+          return {
+            ...student,
+            scores: student.scores.filter(score => 
+              score.term === term && 
+              score.academic_year === filterAcademicYear
+            )
+          };
+        }).filter(student => student.scores.length > 0);
+        
+        if (studentsForTerm.length > 0) {
+          groupedData.push({
+            title: `${term} - ${filterAcademicYear}`,
+            students: studentsForTerm
+          });
+        }
+      });
+    }
+    // Case 4: All terms & all years - group by term and year
+    else {
+      // Get all unique terms and years combinations
+      const uniqueTerms = TERMS;
+      const uniqueYears = Array.from(new Set(
+        filtered.flatMap(student => 
+          student.scores.map(score => score.academic_year)
+        ).filter(Boolean)
+      )).sort();
+      
+      // Create a table for each term and year combination
+      uniqueTerms.forEach(term => {
+        uniqueYears.forEach(year => {
+          const studentsForTermAndYear = filtered.map(student => {
+            return {
+              ...student,
+              scores: student.scores.filter(score => 
+                score.term === term && 
+                score.academic_year === year
+              )
+            };
+          }).filter(student => student.scores.length > 0);
+          
+          if (studentsForTermAndYear.length > 0) {
+            groupedData.push({
+              title: `${term} - ${year}`,
+              students: studentsForTermAndYear
+            });
+          }
+        });
+      });
+    }
+    
+    console.log('Created', groupedData.length, 'tables with filtered data');
+    return groupedData;
+  };
+  
   // Function to apply filters based on term and academic year
   const applyFilters = () => {
+    // For single table view (when both specific term and year are selected)
+    // we still need the filteredStudents for pagination
     let filtered = [...students];
     
-    // If we have term or academic year filters, apply them
-    // Otherwise show all data
-    if (filterTerm) {
-      filtered = filtered.filter(student => {
-        // Check if any scores for this student match the selected term
-        return student.scores.some(score => 
-          // Handle both cases: when term is defined and when it's null/undefined
-          score.term === filterTerm || (!score.term && !filterTerm)
-        );
-      });
+    if (filterTerm || filterAcademicYear) {
+      filtered = filtered.map(student => {
+        let filteredScores = [...student.scores];
+        
+        if (filterTerm) {
+          filteredScores = filteredScores.filter(score => score.term === filterTerm);
+        }
+        
+        if (filterAcademicYear) {
+          filteredScores = filteredScores.filter(score => score.academic_year === filterAcademicYear);
+        }
+        
+        return {
+          ...student,
+          scores: filteredScores
+        };
+      }).filter(student => student.scores.length > 0);
     }
     
-    if (filterAcademicYear) {
-      filtered = filtered.filter(student => {
-        // Check if any scores for this student match the selected academic year
-        return student.scores.some(score => 
-          // Handle both cases: when academic_year is defined and when it's null/undefined
-          score.academic_year === filterAcademicYear || (!score.academic_year && !filterAcademicYear)
-        );
-      });
-    }
-    
-    console.log('Filtered students:', filtered.length, 'out of', students.length);
     setFilteredStudents(filtered);
   };
 
@@ -250,25 +383,77 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    if (!confirm('Are you sure you want to delete all scores for this student?')) {
+    // Find the student in the filtered list to get their visible scores
+    const studentToDelete = filteredStudents.find(s => s.id === studentId);
+    if (!studentToDelete) return;
+    
+    // Get the IDs of the scores that are currently visible (match the filter)
+    const scoreIdsToDelete = studentToDelete.scores.map(score => score.id);
+    
+    if (scoreIdsToDelete.length === 0) return;
+    
+    const confirmMessage = filterTerm || filterAcademicYear
+      ? `Are you sure you want to delete the filtered scores (${scoreIdsToDelete.length}) for this student?`
+      : 'Are you sure you want to delete all scores for this student?';
+    
+    if (!confirm(confirmMessage)) {
       return;
     }
     
     try {
-      // Delete all scores for this student in this subject
+      // Only delete the specific score records that match the current filters
       const { error } = await supabase
         .from('scores')
         .delete()
-        .eq('student_id', studentId)
-        .eq('subject_id', subject.id);
+        .in('id', scoreIdsToDelete);
       
       if (error) throw error;
       
+      console.log(`Deleted ${scoreIdsToDelete.length} scores for student ${studentId}`);
       fetchStudentData();
       onDataChanged();
     } catch (error) {
       console.error('Error deleting student data:', error);
       setError('Failed to delete student data. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedStudents.length === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete scores for ${selectedStudents.length} student(s)?`)) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      // Get the IDs of the scores that are currently visible (match the filter) for each selected student
+      const scoreIdsToDelete = selectedStudents.flatMap(studentId => {
+        const student = filteredStudents.find(s => s.id === studentId);
+        return student ? student.scores.map(score => score.id) : [];
+      });
+      
+      if (scoreIdsToDelete.length === 0) return;
+      
+      // Only delete the specific score records that match the current filters
+      const { error } = await supabase
+        .from('scores')
+        .delete()
+        .in('id', scoreIdsToDelete);
+      
+      if (error) throw error;
+      
+      console.log(`Deleted ${scoreIdsToDelete.length} scores for ${selectedStudents.length} students`);
+      setSelectedStudents([]);
+      setSelectAll(false);
+      fetchStudentData();
+      onDataChanged();
+    } catch (error) {
+      console.error('Error deleting student data:', error);
+      setError('Failed to delete student data. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -289,36 +474,7 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
     setSelectAll(!selectAll);
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedStudents.length === 0) return;
-    
-    if (!confirm(`Are you sure you want to delete scores for ${selectedStudents.length} student(s)?`)) {
-      return;
-    }
-    
-    setIsDeleting(true);
-    
-    try {
-      // Delete scores for selected students
-      const { error } = await supabase
-        .from('scores')
-        .delete()
-        .in('student_id', selectedStudents)
-        .eq('subject_id', subject.id);
-      
-      if (error) throw error;
-      
-      setSelectedStudents([]);
-      setSelectAll(false);
-      fetchStudentData();
-      onDataChanged();
-    } catch (error) {
-      console.error('Error deleting student data:', error);
-      setError('Failed to delete student data. Please try again.');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  // Bulk delete function is defined above
 
   if (loading) {
     return (
@@ -331,15 +487,53 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
 
   if (students.length === 0) {
     return (
-      <div className="bg-gray-50 p-6 rounded-lg text-center">
-        <p className="text-gray-600 mb-4">No data has been uploaded for this subject yet.</p>
-        <button 
-          onClick={fetchStudentData}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+      <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-2xl mx-auto">
+        <div className="mb-6">
+          <div className="bg-blue-100 rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center">
+            <Upload className="w-8 h-8 text-blue-600" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Welcome to {subject.name}!</h2>
+        <p className="text-gray-600 mb-6">Get started by uploading your first set of student scores for this subject.</p>
+        
+        <div className="flex flex-col sm:flex-row justify-center gap-4">
+          <button 
+            onClick={() => setIsUploadModalOpen(true)}
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Upload className="w-5 h-5 mr-2" />
+            Upload Scores
+          </button>
+          <button 
+            onClick={fetchStudentData}
+            className="inline-flex items-center px-6 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+          >
+            <RefreshCw className="w-5 h-5 mr-2" />
+            Refresh
+          </button>
+        </div>
+        
+        {/* Upload Modal */}
+        <Modal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          title={`Upload Scores - ${subject.name}`}
+          size="lg"
         >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </button>
+          <DataUpload
+            schoolId={schoolId}
+            classItem={classItem}
+            subject={subject}
+            onBack={() => setIsUploadModalOpen(false)}
+            onDataChanged={() => {
+              setIsUploadModalOpen(false);
+              fetchStudentData();
+              onDataChanged();
+            }}
+            selectedTerm={filterTerm}
+            academicYear={filterAcademicYear}
+          />
+        </Modal>
       </div>
     );
   }
@@ -347,60 +541,99 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
   return (
     <div className="bg-white shadow rounded-lg p-6 mt-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-        <h2 className="text-xl font-semibold text-gray-800">Previous Uploads</h2>
-        
-        <div className="flex flex-wrap gap-4">
-          <div className="filter-section bg-gray-50 p-3 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Filter Records</h3>
-            <div className="flex flex-wrap gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Term</label>
-                <select
-                  value={filterTerm || ''}
-                  onChange={(e) => setFilterTerm(e.target.value || undefined)}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm min-w-[120px]"
-                >
-                  <option value="">All Terms</option>
-                  {TERMS.map(term => (
-                    <option key={term} value={term}>{term}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Academic Year</label>
-                <select
-                  value={filterAcademicYear || ''}
-                  onChange={(e) => setFilterAcademicYear(e.target.value || undefined)}
-                  className="px-3 py-1 border border-gray-300 rounded-md text-sm min-w-[120px]"
-                >
-                  <option value="">All Years</option>
-                  {availableAcademicYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="flex items-end">
-                <button 
-                  onClick={() => {
-                    setFilterTerm(undefined);
-                    setFilterAcademicYear(undefined);
-                  }}
-                  className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                >
-                  Clear Filters
-                </button>
-              </div>
+        <div className="flex items-center">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mr-3 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <h2 className="text-xl font-semibold text-gray-800">Previous Uploads</h2>
+        </div>
+
+        <button
+          onClick={() => setIsUploadModalOpen(true)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          Upload Data
+        </button>
+      </div>
+      
+      {/* Upload Data Modal */}
+      <Modal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        title="Upload Student Data"
+        size="lg"
+      >
+        <DataUpload
+          schoolId={schoolId}
+          classItem={classItem}
+          subject={subject}
+          onBack={() => setIsUploadModalOpen(false)}
+          onDataChanged={() => {
+            fetchStudentData();
+            onDataChanged();
+          }}
+          selectedTerm={filterTerm}
+          academicYear={filterAcademicYear}
+        />
+      </Modal>
+      
+      <div className="mb-4">
+        <div className="filter-section bg-gray-50 p-3 rounded-lg shadow-sm">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Filter Records</h3>
+          <div className="flex flex-wrap gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Term</label>
+              <select
+                value={filterTerm || ''}
+                onChange={(e) => setFilterTerm(e.target.value || undefined)}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm min-w-[120px]"
+              >
+                <option value="">All Terms</option>
+                {TERMS.map(term => (
+                  <option key={term} value={term}>{term}</option>
+                ))}
+              </select>
             </div>
             
-            {(filterTerm || filterAcademicYear) && (
-              <div className="mt-2 text-xs text-gray-500">
-                Showing: {filterTerm ? filterTerm : 'All Terms'} | {filterAcademicYear ? filterAcademicYear : 'All Years'}
-                <span className="ml-2 text-gray-400">({filteredStudents.length} records)</span>
-              </div>
-            )}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Academic Year</label>
+              <select
+                value={filterAcademicYear || ''}
+                onChange={(e) => setFilterAcademicYear(e.target.value || undefined)}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm min-w-[120px]"
+              >
+                <option value="">All Years</option>
+                {availableAcademicYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button 
+                onClick={() => {
+                  setFilterTerm(undefined);
+                  setFilterAcademicYear(undefined);
+                }}
+                className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Clear Filters
+              </button>
+            </div>
           </div>
+          
+          {(filterTerm || filterAcademicYear) && (
+            <div className="mt-2 text-xs text-gray-500">
+              Showing: {filterTerm ? filterTerm : 'All Terms'} | {filterAcademicYear ? filterAcademicYear : 'All Years'}
+              <span className="ml-2 text-gray-400">({filteredStudents.length} records total)</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -483,121 +716,39 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-3 py-3 text-left">
-                <input
-                  type="checkbox"
-                  checked={selectAll}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Student ID
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              {assessmentTypes.map((type) => (
-                <th key={type} scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {type}
-                </th>
-              ))}
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredStudents.map((student) => (
-              <tr key={student.id} className={editingStudentId === student.id ? 'bg-blue-50' : ''}>
-                <td className="px-3 py-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(student.id)}
-                    onChange={() => toggleSelectStudent(student.id)}
-                    disabled={editingStudentId === student.id}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {student.student_id}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {student.name}
-                </td>
-                {assessmentTypes.map((type) => {
-                  const scoreObj = student.scores.find(s => s.assessment_type === type);
-                  const score = scoreObj ? scoreObj.score : '-';
-                  
-                  return (
-                    <td key={`${student.id}-${type}`} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {editingStudentId === student.id ? (
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={editData[type] !== undefined ? editData[type] : (scoreObj ? score : '')}
-                          onChange={(e) => handleScoreChange(type, e.target.value)}
-                          className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      ) : (
-                        score
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  {editingStudentId === student.id ? (
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => handleSaveEdit(student)}
-                        className="text-green-600 hover:text-green-900"
-                        title="Save changes"
-                      >
-                        <Save className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        className="text-gray-600 hover:text-gray-900"
-                        title="Cancel"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => handleEdit(student)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteStudent(student.id)}
-                        className="text-red-600 hover:text-red-900"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Display grouped tables when we have multiple groups */}
+      {groupedData.length > 0 ? (
+        <div className="space-y-8">
+          {groupedData.map((group, index) => (
+            <div key={index}>
+              <StudentScoresTable
+                students={group.students}
+                assessmentTypes={assessmentTypes}
+                title={group.title}
+                onEdit={handleEdit}
+                onCancelEdit={handleCancelEdit}
+                onSaveEdit={handleSaveEdit}
+                onDelete={handleDeleteStudent}
+                onToggleSelect={toggleSelectStudent}
+                onToggleSelectAll={toggleSelectAll}
+                selectedStudents={selectedStudents}
+                selectAll={selectAll}
+                editingStudentId={editingStudentId}
+                editData={editData}
+                onScoreChange={handleScoreChange}
+                initialStudentsPerPage={10}
+                tableId={`table-${index}`}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No data found for the selected filters.</p>
+        </div>
+      )}
     </div>
   );
 };
-
-
-
-
 
 export default PreviousUploads;

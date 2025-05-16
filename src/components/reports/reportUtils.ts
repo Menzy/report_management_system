@@ -48,12 +48,24 @@ export const generateStudentReport = async (
 
   // Process each subject
   for (const subject of subjects) {
-    // Fetch scores for this student and subject
-    const { data: scores, error: scoresError } = await supabase
+    // Fetch scores for this student and subject, filtered by term and academic year
+    const query = supabase
       .from('scores')
       .select('*')
       .eq('student_id', student.id)
       .eq('subject_id', subject.id);
+      
+    // Add term filter if provided
+    if (term) {
+      query.eq('term', term);
+    }
+    
+    // Add academic year filter if provided
+    if (academicYear) {
+      query.eq('academic_year', academicYear);
+    }
+    
+    const { data: scores, error: scoresError } = await query;
 
     if (scoresError) throw scoresError;
 
@@ -91,19 +103,25 @@ export const generateStudentReport = async (
       // Calculate continuous assessment (50% of total)
       let caScore = 0;
       if (classAssessmentScores.length > 0) {
-        // Sum all class assessment scores
+        // Sum all class assessment scores (test1, test2, project work, group work)
         const totalClassScore = classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
-
-        // Calculate 50% of total class score
+        
+        // Calculate 50% of the total class score (multiply by 0.5 to get 50%)
         caScore = totalClassScore * 0.5;
+        
+        console.log('Class assessment scores:', classAssessmentScores);
+        console.log('Total class score:', totalClassScore);
+        console.log('CA score (50%):', caScore);
       }
 
-      console.log('Calculated CA score:', caScore);
+      console.log('Calculated CA score (50%):', caScore);
 
       // Calculate exam score (50% of total)
       let finalExamScore = 0;
       if (examScore) {
-        finalExamScore = (examScore.score / 100) * 50; // Convert to 50% of final grade
+        // Multiply exam score by 0.5 to get 50% of the total
+        finalExamScore = examScore.score * 0.5;
+        console.log('Original exam score:', examScore.score);
       }
 
       console.log('Calculated exam score:', finalExamScore);
@@ -147,12 +165,24 @@ export const calculateSubjectPositions = async (report: Report, classId: string)
       // Get all scores for this subject for all students
       const studentIds = students.map((s) => s.id);
 
-      // Fetch all scores for this subject
-      const { data: allScores, error: scoresError } = await supabase
+      // Fetch all scores for this subject, filtered by term and academic year
+      let query = supabase
         .from('scores')
         .select('student_id, assessment_type, score')
         .eq('subject_id', subject.subject_id)
         .in('student_id', studentIds);
+        
+      // Add term filter if provided
+      if (report.term) {
+        query = query.eq('term', report.term);
+      }
+      
+      // Add academic year filter if provided
+      if (report.academicYear) {
+        query = query.eq('academic_year', report.academicYear);
+      }
+      
+      const { data: allScores, error: scoresError } = await query;
 
       if (scoresError) throw scoresError;
 
@@ -256,11 +286,24 @@ export const calculateOverallPosition = async (report: Report, classId: string):
       // Get all scores for this student
       const subjectIds = subjects.map((s) => s.id);
 
-      const { data: scores, error: scoresError } = await supabase
+      // Fetch scores filtered by term and academic year
+      let query = supabase
         .from('scores')
         .select('subject_id, assessment_type, score')
         .eq('student_id', student.id)
         .in('subject_id', subjectIds);
+        
+      // Add term filter if provided
+      if (report.term) {
+        query = query.eq('term', report.term);
+      }
+      
+      // Add academic year filter if provided
+      if (report.academicYear) {
+        query = query.eq('academic_year', report.academicYear);
+      }
+      
+      const { data: scores, error: scoresError } = await query;
 
       if (scoresError) throw scoresError;
 
@@ -276,17 +319,18 @@ export const calculateOverallPosition = async (report: Report, classId: string):
       // Group scores by subject
       const scoresBySubject: { [key: string]: { examScores: any[]; classAssessmentScores: any[] } } = {};
       for (const score of scores) {
-        if (!scoresBySubject[score.subject_id]) {
-          scoresBySubject[score.subject_id] = {
+        const subjectId = score.subject_id;
+        if (!scoresBySubject[subjectId]) {
+          scoresBySubject[subjectId] = {
             examScores: [],
             classAssessmentScores: [],
           };
         }
 
         if (score.assessment_type.toUpperCase().includes('EXAM')) {
-          scoresBySubject[score.subject_id].examScores.push(score);
+          scoresBySubject[subjectId].examScores.push(score);
         } else {
-          scoresBySubject[score.subject_id].classAssessmentScores.push(score);
+          scoresBySubject[subjectId].classAssessmentScores.push(score);
         }
       }
 

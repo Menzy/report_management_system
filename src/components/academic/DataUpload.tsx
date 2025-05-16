@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { supabase, Class, Subject, StudentRecord, ASSESSMENT_TYPES, TERMS, getCurrentAcademicYear } from '../../lib/supabase';
 import { ArrowLeft, Upload, FileSpreadsheet, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import PreviousUploads from './PreviousUploads';
 
 type DataUploadProps = {
   schoolId: string;
@@ -10,6 +9,8 @@ type DataUploadProps = {
   subject: Subject;
   onBack: () => void;
   onDataChanged?: () => void;
+  selectedTerm?: string;
+  academicYear?: string;
 };
 
 type ValidationError = {
@@ -18,15 +19,15 @@ type ValidationError = {
   message: string;
 };
 
-const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack, onDataChanged }) => {
+const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack, onDataChanged, selectedTerm: initialTerm, academicYear: initialAcademicYear }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<StudentRecord[]>([]);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'validating' | 'uploading' | 'success' | 'error'>('idle');
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedTerm, setSelectedTerm] = useState<string>(TERMS[0]);
-  const [academicYear, setAcademicYear] = useState<string>(getCurrentAcademicYear());
+  const [selectedTerm, setSelectedTerm] = useState<string>(initialTerm || TERMS[0]);
+  const [academicYear, setAcademicYear] = useState<string>(initialAcademicYear || getCurrentAcademicYear());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -295,26 +296,53 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           }
         }
         
-        // Delete existing scores for this student and subject
-        await supabase
+        // First, check if we're dealing with a duplicate upload by comparing with existing data
+        const { data: existingScores, error: fetchError } = await supabase
           .from('scores')
-          .delete()
+          .select('assessment_type')
           .eq('student_id', studentId)
-          .eq('subject_id', subject.id);
+          .eq('subject_id', subject.id)
+          .eq('term', selectedTerm)
+          .eq('academic_year', academicYear);
+        
+        if (fetchError) {
+          console.error('Error fetching existing scores:', fetchError);
+          throw fetchError;
+        }
+        
+        // If we already have scores for this student/subject/term/year, delete them before inserting new ones
+        if (existingScores && existingScores.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('scores')
+            .delete()
+            .eq('student_id', studentId)
+            .eq('subject_id', subject.id)
+            .eq('term', selectedTerm)
+            .eq('academic_year', academicYear);
+          
+          if (deleteError) {
+            console.error('Error deleting existing scores:', deleteError);
+            throw deleteError;
+          }
+        }
         
         // Insert new scores with term and academic year
         console.log('Using term:', selectedTerm);
         console.log('Using academic year:', academicYear);
         
-        const scoreInserts = Object.entries(record.scores).map(([assessmentType, score]) => {
+        // Filter out duplicate assessment types to ensure we only insert one record per assessment type
+        // This prevents the multiplication of records
+        const uniqueAssessmentTypes = new Set(Object.keys(record.scores));
+        const scoreInserts = Array.from(uniqueAssessmentTypes).map(assessmentType => {
+          const score = record.scores[assessmentType];
           const insertData = {
             student_id: studentId,
             subject_id: subject.id,
             assessment_type: assessmentType,
             score: score,
             max_score: 100,
-            term: selectedTerm, // Always use the currently selected term
-            academic_year: academicYear // Always use the currently selected academic year
+            term: selectedTerm,
+            academic_year: academicYear
           };
           console.log('Inserting score with data:', insertData);
           return insertData;
@@ -325,7 +353,10 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
             .from('scores')
             .insert(scoreInserts);
           
-          if (scoresError) throw scoresError;
+          if (scoresError) {
+            console.error('Error inserting scores:', scoresError);
+            throw scoresError;
+          }
         }
         
         // Update progress
@@ -659,15 +690,6 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
           </div>
         </>
       )}
-      
-      <PreviousUploads 
-        schoolId={schoolId}
-        classItem={classItem}
-        subject={subject}
-        onDataChanged={handleDataChanged}
-        selectedTerm={selectedTerm}
-        academicYear={academicYear}
-      />
     </div>
   );
 };
