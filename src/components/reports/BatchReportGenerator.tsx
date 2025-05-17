@@ -460,15 +460,15 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>80-100</td><td>1</td><td>Highly Proficient (HP)</td></tr>
-                  <tr><td>75-79</td><td>2</td><td>Highly Proficient (HP)</td></tr>
-                  <tr><td>70-74</td><td>3</td><td>Proficient (P)</td></tr>
-                  <tr><td>65-69</td><td>4</td><td>Proficient (P)</td></tr>
-                  <tr><td>60-64</td><td>5</td><td>Proficient (P)</td></tr>
-                  <tr><td>50-59</td><td>6</td><td>Approaching Proficiency (AP)</td></tr>
-                  <tr><td>45-49</td><td>7</td><td>Developing (D)</td></tr>
-                  <tr><td>40-44</td><td>8</td><td>Developing (D)</td></tr>
-                  <tr><td>0-39</td><td>9</td><td>Emerging (E)</td></tr>
+                  <tr><td>80-100</td><td>1</td><td>Excellent</td></tr>
+                  <tr><td>75-79</td><td>2</td><td>Very Good</td></tr>
+                  <tr><td>70-74</td><td>3</td><td>Good</td></tr>
+                  <tr><td>65-69</td><td>4</td><td>Credit</td></tr>
+                  <tr><td>60-64</td><td>5</td><td>Average</td></tr>
+                  <tr><td>50-59</td><td>6</td><td>Below Average</td></tr>
+                  <tr><td>45-49</td><td>7</td><td>Pass</td></tr>
+                  <tr><td>40-44</td><td>8</td><td>Developing</td></tr>
+                  <tr><td>0-39</td><td>9</td><td>Emerging</td></tr>
                 </tbody>
               </table>
             </div>

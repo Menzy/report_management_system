@@ -390,22 +390,22 @@ export const calculateOverallPosition = async (report: Report, classId: string):
 export const getGradeAndRemark = (score: number): { grade: string; remark: string } => {
   // Based on the provided grading system
   if (score >= 80) {
-    return { grade: '1', remark: 'Highly Proficient (HP)' };
+    return { grade: '1', remark: 'Excellent' };
   } else if (score >= 75) {
-    return { grade: '2', remark: 'Highly Proficient (HP)' };
+    return { grade: '2', remark: 'Very Good' };
   } else if (score >= 70) {
-    return { grade: '3', remark: 'Proficient (P)' };
+    return { grade: '3', remark: 'Good' };
   } else if (score >= 65) {
-    return { grade: '4', remark: 'Proficient (P)' };
+    return { grade: '4', remark: 'Credit' };
   } else if (score >= 60) {
-    return { grade: '5', remark: 'Proficient (P)' };
+    return { grade: '5', remark: 'Average' };
   } else if (score >= 50) {
-    return { grade: '6', remark: 'Approaching Proficiency (AP)' };
+    return { grade: '6', remark: 'Below Average' };
   } else if (score >= 45) {
-    return { grade: '7', remark: 'Developing (D)' };
+    return { grade: '7', remark: 'Pass' };
   } else if (score >= 40) {
-    return { grade: '8', remark: 'Developing (D)' };
+    return { grade: '8', remark: 'Developing' };
   } else {
-    return { grade: '9', remark: 'Emerging (E)' };
+    return { grade: '9', remark: 'Emerging' };
   }
 };
