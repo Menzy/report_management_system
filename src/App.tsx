@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import AuthForm from './components/AuthForm';
 import OnboardingForm from './components/OnboardingForm';
@@ -13,6 +13,7 @@ function App() {
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [initialized, setInitialized] = useState(false);
+
 
   useEffect(() => {
     // Prevent multiple initializations
@@ -113,15 +114,16 @@ function App() {
   if (showLanding) {
     return (
       <div className="min-h-screen">
-        <LandingPage />
-        <div className="fixed top-4 right-4 z-50">
-          <button
-            onClick={() => setShowLanding(false)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-md"
-          >
-            Sign In
-          </button>
-        </div>
+        <LandingPage 
+          onSignIn={() => {
+            setIsLoginMode(true);
+            setShowLanding(false);
+          }} 
+          onSignUp={() => {
+            setIsLoginMode(false);
+            setShowLanding(false);
+          }} 
+        />
       </div>
     );
   }
@@ -137,7 +139,7 @@ function App() {
             <h1 className="text-4xl font-bold text-gray-900">School Report Management System</h1>
             <p className="mt-2 text-xl text-gray-600">Streamline your school reporting process</p>
           </div>
-          <AuthForm onSuccess={handleAuthSuccess} />
+          <AuthForm onSuccess={handleAuthSuccess} initialIsLogin={isLoginMode} />
         </div>
       ) : hasCompletedOnboarding === false ? (
         <div className="flex flex-col items-center justify-center min-h-screen">

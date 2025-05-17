@@ -233,6 +233,7 @@ export const calculateSubjectPositions = async (report: Report, classId: string)
 
       if (position !== -1) {
         subject.position = `${position + 1} out of ${studentScores.length}`;
+
       } else {
         subject.position = 'N/A';
       }
@@ -360,7 +361,7 @@ export const calculateOverallPosition = async (report: Report, classId: string):
     const position = studentAverages.findIndex((s) => s.studentId === report.student.id);
 
     if (position !== -1) {
-      report.position = `${position + 1} out of ${studentAverages.length}`;
+      report.position = `${position + 1}`;
     } else {
       report.position = 'N/A';
     }

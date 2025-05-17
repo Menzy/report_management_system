@@ -1,6 +1,6 @@
-import React, { forwardRef } from "react";
+import { forwardRef } from "react";
 
-const ReportCardTemplate = forwardRef(({ report }, ref) => {
+const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report }, ref) => {
   return (
     <div ref={ref} className="report-card">
       {/* Report Card Template */}
@@ -58,18 +58,24 @@ const ReportCardTemplate = forwardRef(({ report }, ref) => {
           <h3 className="text-lg font-semibold mb-2">Academic Performance</h3>
           <table className="min-w-full border border-gray-300">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-4 py-2 text-left">Subject</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">CA (50%)</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Exam (50%)</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Total (100%)</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Grade</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Position</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Remark</th>
+              <tr className="bg-gray-100 text-xs font-normal">
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">Subject</th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">
+                  Class Score<br /><span className="block text-[10px] font-normal">(50%)</span>
+                </th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">
+                  Exam Score<br /><span className="block text-[10px] font-normal">(50%)</span>
+                </th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">
+                  Overall<br /><span className="block text-[10px] font-normal">(100%)</span>
+                </th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">Grade</th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">Position</th>
+                <th className="border border-gray-300 px-4 py-2 text-center font-normal">Remark</th>
               </tr>
             </thead>
-            <tbody>
-              {report.subjects.map((subject, index) => (
+            <tbody className="text-xs">
+              {report.subjects.map((subject: any, index: any) => (
                 <tr key={subject.subject_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="border border-gray-300 px-4 py-2">{subject.subject_name}</td>
                   <td className="border border-gray-300 px-4 py-2 text-center">{subject.continuous_assessment}</td>
@@ -130,11 +136,6 @@ const ReportCardTemplate = forwardRef(({ report }, ref) => {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-6 text-center border-t border-gray-300 pt-4">
-          <p className="text-sm text-gray-600">Report generated on {new Date().toLocaleDateString()}</p>
         </div>
       </div>
     </div>

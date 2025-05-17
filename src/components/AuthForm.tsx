@@ -4,10 +4,11 @@ import { Mail, Lock, User, LogIn } from 'lucide-react';
 
 type AuthFormProps = {
   onSuccess: () => void;
+  initialIsLogin?: boolean;
 };
 
-const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
-  const [isLogin, setIsLogin] = useState(true);
+const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true }) => {
+  const [isLogin, setIsLogin] = useState(initialIsLogin);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
