@@ -1,22 +1,57 @@
-import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Building2, MapPin, MessageSquareQuote, Upload, Mail, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { ArrowLeft, Building2, MapPin, Mail, Phone, MessageSquareQuote, Upload, Save, Check } from 'lucide-react';
 
-type OnboardingFormProps = {
-  userId: string;
-  onSuccess: () => void;
+type SchoolProfileManagementProps = {
+  schoolId: string;
+  onBack: () => void;
 };
 
-const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) => {
+const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({ schoolId, onBack }) => {
   const [schoolName, setSchoolName] = useState('');
   const [schoolSlogan, setSchoolSlogan] = useState('');
   const [schoolAddress, setSchoolAddress] = useState('');
   const [schoolEmail, setSchoolEmail] = useState('');
   const [schoolPhone, setSchoolPhone] = useState('');
   const [schoolCrest, setSchoolCrest] = useState<File | null>(null);
+  const [currentCrestUrl, setCurrentCrestUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSchoolData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('schools')
+          .select('*')
+          .eq('id', schoolId)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setSchoolName(data.name || '');
+          setSchoolSlogan(data.slogan || '');
+          setSchoolAddress(data.address || '');
+          setSchoolEmail(data.email || '');
+          setSchoolPhone(data.phone || '');
+          setCurrentCrestUrl(data.crest_url || null);
+        }
+      } catch (err) {
+        setError('Failed to load school data. Please try again.');
+        console.error('Error fetching school data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (schoolId) {
+      fetchSchoolData();
+    }
+  }, [schoolId]);
 
   const handleCrestChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -34,18 +69,19 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
-      // Create school entry even without a crest
-      let crestUrl = '';
+      // Handle crest upload if a new one is selected
+      let crestUrl = currentCrestUrl;
       
       if (schoolCrest) {
         try {
           // Upload the school crest to Supabase Storage
           const fileExt = schoolCrest.name.split('.').pop();
-          const fileName = `${userId}-${Date.now()}.${fileExt}`;
+          const fileName = `${schoolId}-${Date.now()}.${fileExt}`;
           const filePath = `school-crests/${fileName}`;
 
           const { error: uploadError, data: uploadData } = await supabase.storage
@@ -54,7 +90,7 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
 
           if (uploadError) {
             console.error('Error uploading crest:', uploadError);
-            // Continue without image
+            // Continue without updating the image
           } else if (uploadData) {
             // Get the public URL for the uploaded image
             const { data: publicUrlData } = supabase.storage
@@ -65,57 +101,116 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
           }
         } catch (uploadErr) {
           console.error('Error uploading crest:', uploadErr);
-          // Continue without image
+          // Continue without updating the image
         }
       }
 
-      // Insert the school details into the database
-      const { error: insertError } = await supabase
+      // Update the school details in the database
+      const { error: updateError } = await supabase
         .from('schools')
-        .insert({
+        .update({
           name: schoolName,
           slogan: schoolSlogan,
           address: schoolAddress,
           email: schoolEmail,
           phone: schoolPhone,
           crest_url: crestUrl,
-          user_id: userId
-        });
-
-      if (insertError) throw insertError;
-
-      // Update the user's onboarding status
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ has_completed_onboarding: true })
-        .eq('id', userId);
+        })
+        .eq('id', schoolId);
 
       if (updateError) throw updateError;
 
-      onSuccess();
+      setSuccessMessage('School profile updated successfully!');
+      
+      // Update the current crest URL if a new one was uploaded
+      if (crestUrl !== currentCrestUrl) {
+        setCurrentCrestUrl(crestUrl);
+      }
+      
+      // Clear the file input
+      setSchoolCrest(null);
+      setPreviewUrl(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
-      setLoading(false);
+      setSaving(false);
+      
+      // Auto-hide success message after 3 seconds
+      if (successMessage) {
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 3000);
+      }
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="ml-2 text-gray-600">Loading school profile...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-2xl p-8 space-y-8 bg-white rounded-lg shadow-md">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-800">School Onboarding</h1>
-        <p className="mt-2 text-gray-600">
-          Please provide details about your school to complete the setup
-        </p>
+    <div className="bg-white shadow rounded-lg p-6">
+      <div className="flex items-center mb-6">
+        <button
+          onClick={onBack}
+          className="mr-3 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl font-semibold text-gray-800">
+          School Profile Management
+        </h2>
       </div>
 
       {error && (
-        <div className="p-4 text-sm text-red-700 bg-red-100 rounded-md">
+        <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md">
           {error}
         </div>
       )}
 
+      {successMessage && (
+        <div className="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-md flex items-center">
+          <Check className="w-5 h-5 mr-2" />
+          {successMessage}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex items-center justify-center mb-6">
+          <div className="relative w-32 h-32 overflow-hidden rounded-full border-2 border-gray-200">
+            {(currentCrestUrl || previewUrl) ? (
+              <img 
+                src={previewUrl || currentCrestUrl || ''} 
+                alt="School crest" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-full h-full bg-gray-100">
+                <Building2 className="w-16 h-16 text-gray-400" />
+              </div>
+            )}
+            
+            <label 
+              htmlFor="crest-upload" 
+              className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+            >
+              <Upload className="w-8 h-8 text-white" />
+            </label>
+            <input 
+              id="crest-upload" 
+              type="file" 
+              accept="image/*" 
+              className="hidden" 
+              onChange={handleCrestChange}
+            />
+          </div>
+        </div>
+
         <div>
           <label htmlFor="schoolName" className="block text-sm font-medium text-gray-700">
             School Name
@@ -125,9 +220,9 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
               <Building2 className="w-5 h-5 text-gray-400" />
             </div>
             <input
+              type="text"
               id="schoolName"
               name="schoolName"
-              type="text"
               required
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
@@ -146,14 +241,13 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
               <MessageSquareQuote className="w-5 h-5 text-gray-400" />
             </div>
             <input
+              type="text"
               id="schoolSlogan"
               name="schoolSlogan"
-              type="text"
-              required
               value={schoolSlogan}
               onChange={(e) => setSchoolSlogan(e.target.value)}
               className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g. Empowering Minds, Shaping Futures"
+              placeholder="e.g. Nurturing Minds, Building Futures"
             />
           </div>
         </div>
@@ -220,77 +314,21 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
         </div>
 
         <div>
-          <label htmlFor="schoolCrest" className="block text-sm font-medium text-gray-700">
-            School Crest
-          </label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-            <div className="space-y-1 text-center">
-              {previewUrl ? (
-                <div className="flex flex-col items-center">
-                  <img 
-                    src={previewUrl} 
-                    alt="School crest preview" 
-                    className="h-32 w-auto object-contain mb-4"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSchoolCrest(null);
-                      setPreviewUrl(null);
-                    }}
-                    className="text-sm text-red-600 hover:text-red-500"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="flex text-sm text-gray-600">
-                    <label
-                      htmlFor="file-upload"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                    >
-                      <span>Upload a file</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        className="sr-only"
-                        accept="image/*"
-                        onChange={handleCrestChange}
-                      />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    PNG, JPG, GIF up to 10MB
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            School crest is optional. You can add it later if you don't have one now.
-          </p>
-        </div>
-
-        <div>
           <button
             type="submit"
-            disabled={loading}
-            className="flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={saving}
+            className="flex justify-center items-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            {loading ? (
-              <span className="flex items-center">
-                <svg className="w-5 h-5 mr-3 -ml-1 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-              </span>
+            {saving ? (
+              <>
+                <div className="w-5 h-5 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </>
             ) : (
-              "Complete Setup"
+              <>
+                <Save className="w-5 h-5 mr-2" />
+                Save Changes
+              </>
             )}
           </button>
         </div>
@@ -299,4 +337,4 @@ const OnboardingForm: React.FC<OnboardingFormProps> = ({ userId, onSuccess }) =>
   );
 };
 
-export default OnboardingForm;
+export default SchoolProfileManagement;

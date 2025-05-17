@@ -22,6 +22,116 @@ type Props = {
   classes: any[];
 };
 
+// Helper function to save reports to localStorage with better organization
+const saveReportsToLocalStorage = (schoolId: string, reports: ClassReport[]) => {
+  try {
+    // Get existing stored reports
+    const existingReportsStr = localStorage.getItem(`reports_${schoolId}`);
+    let allReportGroups: ReportGroup[] = [];
+    
+    if (existingReportsStr) {
+      try {
+        // Try to parse as the new format (array of ReportGroup objects)
+        const parsed = JSON.parse(existingReportsStr);
+        
+        // Validate that it's an array
+        if (Array.isArray(parsed)) {
+          // Filter out any invalid entries
+          allReportGroups = parsed.filter(group => 
+            group && typeof group === 'object' && group.classReport
+          );
+        }
+      } catch (parseError) {
+        console.error('Error parsing existing reports:', parseError);
+        // If parsing fails, start with empty array
+        allReportGroups = [];
+      }
+    }
+    
+    // Process each new report
+    for (const report of reports) {
+      // Format the timestamp for better readability
+      const now = new Date();
+      const timestamp = now.toISOString();
+      const formattedDate = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(now);
+      
+      // Create a unique group ID based on class, term, and academic year
+      const groupId = `${report.classId}_${report.term}_${report.academicYear}`;
+      
+      // Create a descriptive name for the report group
+      const groupName = `${report.className} - ${report.term} ${report.academicYear} (Generated ${formattedDate})`;
+      
+      // Remove any existing reports with the same class, term, and academic year
+      allReportGroups = allReportGroups.filter(group => 
+        group.id !== groupId
+      );
+      
+      // Add the new report group
+      if (report.status === 'completed') {
+        allReportGroups.push({
+          id: groupId,
+          name: groupName,
+          timestamp,
+          classReport: report
+        });
+      }
+    }
+    
+    // Sort report groups by timestamp (newest first)
+    allReportGroups.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    
+    // Save all report groups back to localStorage
+    localStorage.setItem(`reports_${schoolId}`, JSON.stringify(allReportGroups));
+    console.log('Reports saved to localStorage with organization');
+  } catch (error) {
+    console.error('Error saving reports to localStorage:', error);
+  }
+};
+
+// Define a type for organized report groups
+type ReportGroup = {
+  id: string;           // Unique ID based on class, term, and academic year
+  name: string;         // Descriptive name including class, term, academic year, and generation time
+  timestamp: string;    // ISO timestamp when the report was generated
+  classReport: ClassReport; // The actual report data
+};
+
+// Helper function to load reports from localStorage
+const loadReportsFromLocalStorage = (schoolId: string): ClassReport[] => {
+  try {
+    const savedReports = localStorage.getItem(`reports_${schoolId}`);
+    if (savedReports) {
+      try {
+        // Parse the saved report groups
+        const reportGroups: ReportGroup[] = JSON.parse(savedReports);
+        
+        // Extract just the ClassReport objects from each group and filter out any invalid entries
+        return reportGroups
+          .filter(group => group && group.classReport) // Ensure group and classReport exist
+          .map(group => group.classReport);
+      } catch (parseError) {
+        console.error('Error parsing report groups:', parseError);
+        // If we can't parse the new format, try parsing the old format directly
+        const oldFormatReports = JSON.parse(savedReports);
+        if (Array.isArray(oldFormatReports)) {
+          return oldFormatReports;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading reports from localStorage:', error);
+  }
+  return [];
+};
+
 const BatchReportGenerator = ({ school, classes }: Props) => {
   const [selectedClassId, setSelectedClassId] = useState("");
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear() + "/" + (new Date().getFullYear() + 1));
@@ -33,6 +143,36 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
   const [availableTerms, setAvailableTerms] = useState<string[]>([]);
   const [dataAvailable, setDataAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Load saved reports when component mounts
+  useEffect(() => {
+    if (school?.id) {
+      const savedReports = loadReportsFromLocalStorage(school.id);
+      if (savedReports && savedReports.length > 0) {
+        setClassReports(savedReports);
+        
+        // If we have completed reports, expand the first one
+        // Add null check to prevent errors with undefined status
+        const completedReports = savedReports.filter(r => r && r.status === 'completed');
+        if (completedReports.length > 0) {
+          setExpandedClass(completedReports[0].classId);
+        }
+      }
+    }
+  }, [school?.id]);
+  
+  // Function to get a descriptive name for a report
+  const getReportGroupName = (report: ClassReport): string => {
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    return `${report.className} - ${report.term} ${report.academicYear} (Generated ${formattedDate})`;
+  };
 
   // Fetch available terms and academic years when component mounts or class changes
   useEffect(() => {
@@ -159,46 +299,44 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
   };
 
   const handleGenerateBatchReports = async () => {
-    if (!selectedClassId) return;
+    if (!selectedClassId || !academicYear || !term) {
+      alert("Please select a class, academic year, and term.");
+      return;
+    }
 
     try {
-      // Find the selected class
-      const selectedClass = classes.find((c: any) => c.id === selectedClassId);
-      if (!selectedClass) return;
-
-      // Check if we already have a report for this class
-      const existingReportIndex = classReports.findIndex(report => report.classId === selectedClassId);
-      
-      // Create or update the class report
-      if (existingReportIndex === -1) {
-        // Create a new report entry
-        setClassReports([
-          ...classReports,
-          {
-            classId: selectedClassId,
-            className: selectedClass.name,
-            status: "generating" as const,
-            progress: 0,
-            reports: [],
-            academicYear,
-            term
-          }
-        ]);
-      } else {
-        // Update existing report
-        setClassReports(classReports.map((report, index) => 
-          index === existingReportIndex ? {
-            ...report,
-            status: "generating" as const,
-            progress: 0,
-            reports: [],
-            academicYear,
-            term
-          } : report
-        ));
+      // Find the class details
+      const selectedClass = classes.find(c => c.id === selectedClassId);
+      if (!selectedClass) {
+        throw new Error("Selected class not found.");
       }
 
-      // Set this class as expanded
+      // Initialize class report
+      const newClassReport: ClassReport = {
+        classId: selectedClassId,
+        className: selectedClass.name,
+        status: 'generating',
+        progress: 0,
+        reports: [],
+        academicYear,
+        term
+      };
+
+      // Add to class reports
+      setClassReports(prev => {
+        // Remove any existing report for this class
+        const filteredReports = prev.filter(r => r.classId !== selectedClassId);
+        const updatedReports = [...filteredReports, newClassReport];
+        
+        // Save to localStorage
+        if (school?.id) {
+          saveReportsToLocalStorage(school.id, updatedReports);
+        }
+        
+        return updatedReports;
+      });
+
+      // Expand this class
       setExpandedClass(selectedClassId);
 
       // Fetch students for this class
@@ -280,18 +418,26 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
   };
 
   const updateClassReportCompleted = (classId: string, reports: any[]) => {
-    setClassReports(prevReports => 
-      prevReports.map(report => 
-        report.classId === classId ? 
-          { 
-            ...report, 
-            status: 'completed' as const, 
-            progress: 100, 
-            reports 
-          } : 
-          report
-      )
-    );
+    setClassReports(prevReports => {
+      const updatedReports = prevReports.map(report => {
+        if (report.classId === classId) {
+          return {
+            ...report,
+            status: 'completed' as const,
+            progress: 100,
+            reports
+          };
+        }
+        return report;
+      });
+      
+      // Save to localStorage after updating
+      if (school?.id) {
+        saveReportsToLocalStorage(school.id, updatedReports);
+      }
+      
+      return updatedReports;
+    });
   };
 
   const updateClassReportError = (classId: string, errorMessage: string) => {
@@ -477,7 +623,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
               <h3>Comments</h3>
               <div class="comments">
                 <p><strong>Class Teacher's Comment:</strong> </p>
-                <p style="margin-top: 30px;"><strong>Principal's Comment:</strong> </p>
+                <p style="margin-top: 30px;"><strong>HeadTeacher's Comment:</strong> </p>
               </div>
               
               <div class="signatures">
@@ -485,7 +631,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
                   <div class="signature-line">Class Teacher's Signature</div>
                 </div>
                 <div class="signature">
-                  <div class="signature-line">Principal's Signature</div>
+                  <div class="signature-line">HeadTeacher's Signature</div>
                 </div>
               </div>
             </div>
@@ -598,7 +744,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
           <h4 className="text-lg font-medium text-gray-900 mb-4">Generated Reports</h4>
           <div className="space-y-4">
             {classReports.map((classReport) => (
-              <div key={classReport.classId} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div key={classReport.classId} className="mb-4 overflow-hidden border rounded-lg">
                 <div 
                   className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
                   onClick={() => toggleClassExpansion(classReport.classId)}
@@ -621,7 +767,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
                         {classReport.status === 'generating' 
                           ? `Generating reports (${classReport.progress}%)` 
                           : classReport.status === 'completed'
-                          ? `${classReport.reports.length} reports generated`
+                          ? `${classReport.reports.length} reports - ${classReport.term} ${classReport.academicYear}`
                           : classReport.status === 'error'
                           ? 'Error generating reports'
                           : 'Pending generation'}

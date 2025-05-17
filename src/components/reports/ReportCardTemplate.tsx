@@ -114,7 +114,7 @@ const ReportCardTemplate = forwardRef(({ report }, ref) => {
             <h3 className="text-md font-semibold mb-2">Comments</h3>
             <div className="border border-gray-300 p-2 h-40">
               <p className="text-sm mb-2"><span className="font-semibold">Class Teacher's Comment:</span> </p>
-              <p className="text-sm mt-6"><span className="font-semibold">Principal's Comment:</span> </p>
+              <p className="text-sm mt-6"><span className="font-semibold">HeadTeacher's Comment:</span> </p>
             </div>
             
             <div className="mt-4 grid grid-cols-2 gap-4">
@@ -125,7 +125,7 @@ const ReportCardTemplate = forwardRef(({ report }, ref) => {
               </div>
               <div className="text-center">
                 <div className="border-t border-gray-400 pt-1 mt-8">
-                  <p className="text-sm">Principal's Signature</p>
+                  <p className="text-sm">HeadTeacher's Signature</p>
                 </div>
               </div>
             </div>

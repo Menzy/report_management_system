@@ -46,209 +46,200 @@ export const generateStudentReport = async (
   // Calculate attendance (placeholder - would need actual attendance data)
   report.attendance = { present: Math.floor(Math.random() * 60) + 20, total: 64 };
 
-  // Process each subject
-  for (const subject of subjects) {
-    // Fetch scores for this student and subject, filtered by term and academic year
-    const query = supabase
+  try {
+    // Batch fetch all scores for this student across all subjects in one query
+    const subjectIds = subjects.map((subject) => subject.id);
+
+    // Build query with filters
+    let query = supabase
       .from('scores')
       .select('*')
       .eq('student_id', student.id)
-      .eq('subject_id', subject.id);
-      
+      .in('subject_id', subjectIds);
+
     // Add term filter if provided
     if (term) {
-      query.eq('term', term);
+      query = query.eq('term', term);
     }
-    
+
     // Add academic year filter if provided
     if (academicYear) {
-      query.eq('academic_year', academicYear);
+      query = query.eq('academic_year', academicYear);
     }
-    
-    const { data: scores, error: scoresError } = await query;
+
+    // Execute query to get all scores at once
+    const { data: allScores, error: scoresError } = await query;
 
     if (scoresError) throw scoresError;
 
-    console.log('Scores for student:', student.id, 'subject:', subject.id, scores);
+    // Process each subject using the batch-fetched scores
+    for (const subject of subjects) {
+      // Filter scores for this specific subject
+      const subjectScores = allScores.filter((score) => score.subject_id === subject.id);
 
-    // Initialize subject data
-    const subjectData: SubjectData = {
-      subject_id: subject.id,
-      subject_name: subject.name,
-      continuous_assessment: 0,
-      exam_score: 0,
-      total_score: 0,
-      grade: '',
-      position: 'N/A',
-      remark: '',
-      raw_scores: {},
-    };
+      // Initialize subject data
+      const subjectData: SubjectData = {
+        subject_id: subject.id,
+        subject_name: subject.name,
+        continuous_assessment: 0,
+        exam_score: 0,
+        total_score: 0,
+        grade: '',
+        position: 'N/A',
+        remark: '',
+        raw_scores: {},
+      };
 
-    // Process scores if available
-    if (scores && scores.length > 0) {
-      // Find exam score
-      const examScore = scores.find((s) => s.assessment_type.toUpperCase().includes('EXAM'));
+      // Process scores if available
+      if (subjectScores && subjectScores.length > 0) {
+        // Find exam score
+        const examScore = subjectScores.find((s) => s.assessment_type.toUpperCase().includes('EXAM'));
 
-      // Find class assessment scores (tests, quizzes, etc.)
-      const classAssessmentScores = scores.filter((s) => !s.assessment_type.toUpperCase().includes('EXAM'));
+        // Find class assessment scores (tests, quizzes, etc.)
+        const classAssessmentScores = subjectScores.filter((s) => !s.assessment_type.toUpperCase().includes('EXAM'));
 
-      console.log('Class assessment scores:', classAssessmentScores);
-      console.log('Exam score:', examScore);
+        // Store raw scores for detailed view
+        subjectScores.forEach((score) => {
+          subjectData.raw_scores[score.assessment_type] = score.score;
+        });
 
-      // Store raw scores for detailed view
-      scores.forEach((score) => {
-        subjectData.raw_scores[score.assessment_type] = score.score;
-      });
+        // Calculate continuous assessment (50% of total)
+        let caScore = 0;
+        if (classAssessmentScores.length > 0) {
+          // Sum all class assessment scores
+          const totalClassScore = classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
 
-      // Calculate continuous assessment (50% of total)
-      let caScore = 0;
-      if (classAssessmentScores.length > 0) {
-        // Sum all class assessment scores (test1, test2, project work, group work)
-        const totalClassScore = classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
-        
-        // Calculate 50% of the total class score (multiply by 0.5 to get 50%)
-        caScore = totalClassScore * 0.5;
-        
-        console.log('Class assessment scores:', classAssessmentScores);
-        console.log('Total class score:', totalClassScore);
-        console.log('CA score (50%):', caScore);
+          // Calculate 50% of the total class score
+          caScore = totalClassScore * 0.5;
+        }
+
+        // Calculate exam score (50% of total)
+        let finalExamScore = 0;
+        if (examScore) {
+          finalExamScore = examScore.score * 0.5;
+        }
+
+        // Calculate total score
+        const totalScore = caScore + finalExamScore;
+
+        // Update subject data
+        subjectData.continuous_assessment = Math.round(caScore);
+        subjectData.exam_score = Math.round(finalExamScore);
+        subjectData.total_score = Math.round(totalScore);
+
+        // Get grade and remark
+        const { grade, remark } = getGradeAndRemark(totalScore);
+        subjectData.grade = grade;
+        subjectData.remark = remark;
       }
 
-      console.log('Calculated CA score (50%):', caScore);
-
-      // Calculate exam score (50% of total)
-      let finalExamScore = 0;
-      if (examScore) {
-        // Multiply exam score by 0.5 to get 50% of the total
-        finalExamScore = examScore.score * 0.5;
-        console.log('Original exam score:', examScore.score);
-      }
-
-      console.log('Calculated exam score:', finalExamScore);
-
-      // Calculate total score
-      const totalScore = caScore + finalExamScore;
-
-      console.log('Total score:', totalScore);
-
-      // Update subject data
-      subjectData.continuous_assessment = Math.round(caScore);
-      subjectData.exam_score = Math.round(finalExamScore);
-      subjectData.total_score = Math.round(totalScore);
-
-      // Determine grade and remark based on total score
-      const { grade, remark } = getGradeAndRemark(totalScore);
-      subjectData.grade = grade;
-      subjectData.remark = remark;
+      // Add to report
+      report.subjects.push(subjectData);
     }
-
-    report.subjects.push(subjectData);
+  } catch (error) {
+    console.error('Error generating student report:', error);
   }
 
   return report;
 };
 
 export const calculateSubjectPositions = async (report: Report, classId: string): Promise<void> => {
-  // For each subject, fetch all scores for all students in the class
-  for (const subject of report.subjects) {
-    try {
-      // Get all students in this class
-      const { data: students, error: studentsError } = await supabase
-        .from('students')
-        .select('id')
-        .eq('class_id', classId);
+  try {
+    // 1. Get all students in this class in one query
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('id, name')
+      .eq('class_id', classId);
 
-      if (studentsError) throw studentsError;
+    if (studentsError) throw studentsError;
+    if (!students || students.length === 0) return;
 
-      if (!students || students.length === 0) continue;
+    const studentIds = students.map((s) => s.id);
+    const subjectIds = report.subjects.map((s) => s.subject_id);
 
-      // Get all scores for this subject for all students
-      const studentIds = students.map((s) => s.id);
+    // 2. Batch fetch all scores for all subjects and all students in one query
+    let scoresQuery = supabase
+      .from('scores')
+      .select('student_id, subject_id, assessment_type, score')
+      .in('subject_id', subjectIds)
+      .in('student_id', studentIds);
 
-      // Fetch all scores for this subject, filtered by term and academic year
-      let query = supabase
-        .from('scores')
-        .select('student_id, assessment_type, score')
-        .eq('subject_id', subject.subject_id)
-        .in('student_id', studentIds);
-        
-      // Add term filter if provided
-      if (report.term) {
-        query = query.eq('term', report.term);
-      }
-      
-      // Add academic year filter if provided
-      if (report.academicYear) {
-        query = query.eq('academic_year', report.academicYear);
-      }
-      
-      const { data: allScores, error: scoresError } = await query;
+    if (report.term) {
+      scoresQuery = scoresQuery.eq('term', report.term);
+    }
 
-      if (scoresError) throw scoresError;
+    if (report.academicYear) {
+      scoresQuery = scoresQuery.eq('academic_year', report.academicYear);
+    }
 
-      if (!allScores || allScores.length === 0) {
-        subject.position = 'N/A';
-        continue;
-      }
+    const { data: allScores, error: scoresError } = await scoresQuery;
+
+    if (scoresError) throw scoresError;
+    if (!allScores || allScores.length === 0) return;
+
+    // 3. Process each subject using the batch-fetched data
+    for (const subject of report.subjects) {
+      // Filter scores for this specific subject
+      const subjectScores = allScores.filter((score) => score.subject_id === subject.subject_id);
+      if (subjectScores.length === 0) continue;
 
       // Group scores by student
-      const scoresByStudent: { [key: string]: { examScores: any[]; classAssessmentScores: any[] } } = {};
-      for (const score of allScores) {
-        if (!scoresByStudent[score.student_id]) {
-          scoresByStudent[score.student_id] = {
+      const scoresByStudent: Record<string, { examScores: any[]; classAssessmentScores: any[] }> = {};
+
+      for (const score of subjectScores) {
+        const studentId = score.student_id;
+        if (!scoresByStudent[studentId]) {
+          scoresByStudent[studentId] = {
             examScores: [],
             classAssessmentScores: [],
           };
         }
 
         if (score.assessment_type.toUpperCase().includes('EXAM')) {
-          scoresByStudent[score.student_id].examScores.push(score);
+          scoresByStudent[studentId].examScores.push(score);
         } else {
-          scoresByStudent[score.student_id].classAssessmentScores.push(score);
+          scoresByStudent[studentId].classAssessmentScores.push(score);
         }
       }
 
-      // Calculate total scores for each student
-      const studentTotalScores: { studentId: string; totalScore: number }[] = [];
+      // Calculate total score for each student
+      const studentScores: { studentId: string; totalScore: number }[] = [];
+
       for (const [studentId, scores] of Object.entries(scoresByStudent)) {
         // Calculate CA score (50%)
         let caScore = 0;
         if (scores.classAssessmentScores.length > 0) {
-          // Sum all class assessment scores
           const totalClassScore = scores.classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
-
-          // Calculate 50% of total class score
           caScore = totalClassScore * 0.5;
         }
 
         // Calculate exam score (50%)
         let examScore = 0;
         if (scores.examScores.length > 0) {
-          examScore = (scores.examScores[0].score / 100) * 50;
+          examScore = scores.examScores[0].score * 0.5;
         }
 
-        // Calculate total
-        const totalScore = caScore + examScore;
-
-        studentTotalScores.push({
+        studentScores.push({
           studentId,
-          totalScore,
+          totalScore: caScore + examScore,
         });
       }
 
       // Sort by total score (descending)
-      studentTotalScores.sort((a, b) => b.totalScore - a.totalScore);
+      studentScores.sort((a, b) => b.totalScore - a.totalScore);
 
       // Find position of our student
-      const position = studentTotalScores.findIndex((s) => s.studentId === report.student.id);
+      const position = studentScores.findIndex((s) => s.studentId === report.student.id);
 
       if (position !== -1) {
-        subject.position = `${position + 1} out of ${studentTotalScores.length}`;
+        subject.position = `${position + 1} out of ${studentScores.length}`;
       } else {
         subject.position = 'N/A';
       }
-    } catch (err) {
-      console.error(`Error calculating position for subject ${subject.subject_name}:`, err);
+    }
+  } catch (err) {
+    console.error('Error calculating subject positions:', err);
+    for (const subject of report.subjects) {
       subject.position = 'Error';
     }
   }
@@ -256,58 +247,53 @@ export const calculateSubjectPositions = async (report: Report, classId: string)
 
 export const calculateOverallPosition = async (report: Report, classId: string): Promise<void> => {
   try {
-    // Get all students in this class
-    const { data: students, error: studentsError } = await supabase
-      .from('students')
-      .select('id, name')
-      .eq('class_id', classId);
+    // 1. Get all students and subjects for this class in parallel
+    const [studentsResult, subjectsResult] = await Promise.all([
+      supabase.from('students').select('id, name').eq('class_id', classId),
+      supabase.from('subjects').select('id, name').eq('class_id', classId),
+    ]);
 
-    if (studentsError) throw studentsError;
+    if (studentsResult.error) throw studentsResult.error;
+    if (subjectsResult.error) throw subjectsResult.error;
 
-    if (!students || students.length === 0) {
+    const students = studentsResult.data;
+    const subjects = subjectsResult.data;
+
+    if (!students || students.length === 0 || !subjects || subjects.length === 0) {
       report.position = 'N/A';
       return;
     }
 
-    // Calculate average score for each student
+    const studentIds = students.map((s) => s.id);
+    const subjectIds = subjects.map((s) => s.id);
+
+    // 2. Batch fetch all scores for all students and subjects in one query
+    let scoresQuery = supabase
+      .from('scores')
+      .select('student_id, subject_id, assessment_type, score')
+      .in('student_id', studentIds)
+      .in('subject_id', subjectIds);
+
+    if (report.term) {
+      scoresQuery = scoresQuery.eq('term', report.term);
+    }
+
+    if (report.academicYear) {
+      scoresQuery = scoresQuery.eq('academic_year', report.academicYear);
+    }
+
+    const { data: allScores, error: scoresError } = await scoresQuery;
+
+    if (scoresError) throw scoresError;
+
+    // 3. Process all students in memory using the batch-fetched data
     const studentAverages: { studentId: string; name: string; averageScore: number }[] = [];
 
     for (const student of students) {
-      // Get all subjects for this class
-      const { data: subjects, error: subjectsError } = await supabase
-        .from('subjects')
-        .select('id')
-        .eq('class_id', classId);
+      // Filter scores for this student
+      const studentScores = allScores?.filter((score) => score.student_id === student.id) || [];
 
-      if (subjectsError) throw subjectsError;
-
-      if (!subjects || subjects.length === 0) continue;
-
-      // Get all scores for this student
-      const subjectIds = subjects.map((s) => s.id);
-
-      // Fetch scores filtered by term and academic year
-      let query = supabase
-        .from('scores')
-        .select('subject_id, assessment_type, score')
-        .eq('student_id', student.id)
-        .in('subject_id', subjectIds);
-        
-      // Add term filter if provided
-      if (report.term) {
-        query = query.eq('term', report.term);
-      }
-      
-      // Add academic year filter if provided
-      if (report.academicYear) {
-        query = query.eq('academic_year', report.academicYear);
-      }
-      
-      const { data: scores, error: scoresError } = await query;
-
-      if (scoresError) throw scoresError;
-
-      if (!scores || scores.length === 0) {
+      if (studentScores.length === 0) {
         studentAverages.push({
           studentId: student.id,
           name: student.name,
@@ -317,8 +303,9 @@ export const calculateOverallPosition = async (report: Report, classId: string):
       }
 
       // Group scores by subject
-      const scoresBySubject: { [key: string]: { examScores: any[]; classAssessmentScores: any[] } } = {};
-      for (const score of scores) {
+      const scoresBySubject: Record<string, { examScores: any[]; classAssessmentScores: any[] }> = {};
+
+      for (const score of studentScores) {
         const subjectId = score.subject_id;
         if (!scoresBySubject[subjectId]) {
           scoresBySubject[subjectId] = {
@@ -342,10 +329,7 @@ export const calculateOverallPosition = async (report: Report, classId: string):
         // Calculate CA score (50%)
         let caScore = 0;
         if (subjectScores.classAssessmentScores.length > 0) {
-          // Sum all class assessment scores
           const totalClassScore = subjectScores.classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
-
-          // Calculate 50% of total class score
           caScore = totalClassScore * 0.5;
         }
 
@@ -355,7 +339,6 @@ export const calculateOverallPosition = async (report: Report, classId: string):
           examScore = (subjectScores.examScores[0].score / 100) * 50;
         }
 
-        // Add to total
         totalScoreSum += caScore + examScore;
         subjectCount++;
       }
@@ -370,10 +353,10 @@ export const calculateOverallPosition = async (report: Report, classId: string):
       });
     }
 
-    // Sort by average score (descending)
+    // 4. Sort by average score (descending)
     studentAverages.sort((a, b) => b.averageScore - a.averageScore);
 
-    // Find position of our student
+    // 5. Find position of our student
     const position = studentAverages.findIndex((s) => s.studentId === report.student.id);
 
     if (position !== -1) {

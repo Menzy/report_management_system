@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, School } from '../lib/supabase';
-import { Building2, LogOut, BookOpen, Users, FileSpreadsheet, FileText } from 'lucide-react';
+import { Building2, LogOut, BookOpen, Users, FileSpreadsheet, FileText, Settings } from 'lucide-react';
 import MapPin from './MapPin';
 import ClassManagement from './academic/ClassManagement';
 import ReportCardGenerator from './reports/ReportCardGenerator';
+import SchoolProfileManagement from './school/SchoolProfileManagement';
 
 type DashboardProps = {
   userId: string;
@@ -14,7 +15,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'academic-records' | 'report-cards'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'academic-records' | 'report-cards' | 'school-profile'>('overview');
 
   useEffect(() => {
     const fetchSchoolData = async () => {
@@ -131,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
                 >
                   <Building2 className="w-5 h-5 mr-2" />
-                  School Overview
+                  Overview
                 </button>
                 <button
                   onClick={() => setActiveTab('academic-records')}
@@ -154,6 +155,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                 >
                   <FileText className="w-5 h-5 mr-2" />
                   Report Cards
+                </button>
+                <button
+                  onClick={() => setActiveTab('school-profile')}
+                  className={`${
+                    activeTab === 'school-profile'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                >
+                  <Settings className="w-5 h-5 mr-2" />
+                  School Profile
                 </button>
               </nav>
             </div>
@@ -203,12 +215,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                         <p className="text-sm text-purple-700">Generate and print student report cards</p>
                       </div>
                     </div>
+                    
+                    <div 
+                      className="bg-amber-50 p-6 rounded-lg shadow-sm border border-amber-100 flex items-center cursor-pointer hover:bg-amber-100 transition-colors"
+                      onClick={() => setActiveTab('school-profile')}
+                    >
+                      <div className="bg-amber-100 p-3 rounded-full mr-4">
+                        <Settings className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-amber-900">School Profile</h3>
+                        <p className="text-sm text-amber-700">Update your school's information and contact details</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : activeTab === 'academic-records' ? (
                 <ClassManagement schoolId={school?.id || ''} />
-              ) : (
+              ) : activeTab === 'report-cards' ? (
                 <ReportCardGenerator schoolId={school?.id || ''} onBack={() => setActiveTab('overview')} />
+              ) : (
+                <SchoolProfileManagement schoolId={school?.id || ''} onBack={() => setActiveTab('overview')} />
               )}
             </div>
           </div>
