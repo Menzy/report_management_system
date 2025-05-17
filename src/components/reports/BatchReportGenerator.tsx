@@ -1,59 +1,345 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Users, CheckCircle, AlertCircle, Clock, Folder, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, Folder, ChevronDown, ChevronUp, Download } from "lucide-react";
 import ClassReportList from "./ClassReportList";
 import ReportCardModal from "./ReportCardModal";
 import { generateStudentReport, calculateSubjectPositions, calculateOverallPosition } from "./reportUtils";
 import JSZip from "jszip";
 
-const BatchReportGenerator = ({ school, classes }) => {
+type ClassReport = {
+  classId: string;
+  className: string;
+  status: 'pending' | 'generating' | 'completed' | 'error';
+  progress: number;
+  reports: any[];
+  academicYear: string;
+  term: string;
+  error?: string;
+};
+
+type Props = {
+  school: any;
+  classes: any[];
+};
+
+// Helper function to save reports to localStorage with better organization
+const saveReportsToLocalStorage = (schoolId: string, reports: ClassReport[]) => {
+  try {
+    // Get existing stored reports
+    const existingReportsStr = localStorage.getItem(`reports_${schoolId}`);
+    let allReportGroups: ReportGroup[] = [];
+    
+    if (existingReportsStr) {
+      try {
+        // Try to parse as the new format (array of ReportGroup objects)
+        const parsed = JSON.parse(existingReportsStr);
+        
+        // Validate that it's an array
+        if (Array.isArray(parsed)) {
+          // Filter out any invalid entries
+          allReportGroups = parsed.filter(group => 
+            group && typeof group === 'object' && group.classReport
+          );
+        }
+      } catch (parseError) {
+        console.error('Error parsing existing reports:', parseError);
+        // If parsing fails, start with empty array
+        allReportGroups = [];
+      }
+    }
+    
+    // Process each new report
+    for (const report of reports) {
+      // Format the timestamp for better readability
+      const now = new Date();
+      const timestamp = now.toISOString();
+      const formattedDate = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(now);
+      
+      // Create a unique group ID based on class, term, and academic year
+      const groupId = `${report.classId}_${report.term}_${report.academicYear}`;
+      
+      // Create a descriptive name for the report group
+      const groupName = `${report.className} - ${report.term} ${report.academicYear} (Generated ${formattedDate})`;
+      
+      // Remove any existing reports with the same class, term, and academic year
+      allReportGroups = allReportGroups.filter(group => 
+        group.id !== groupId
+      );
+      
+      // Add the new report group
+      if (report.status === 'completed') {
+        allReportGroups.push({
+          id: groupId,
+          name: groupName,
+          timestamp,
+          classReport: report
+        });
+      }
+    }
+    
+    // Sort report groups by timestamp (newest first)
+    allReportGroups.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    
+    // Save all report groups back to localStorage
+    localStorage.setItem(`reports_${schoolId}`, JSON.stringify(allReportGroups));
+    console.log('Reports saved to localStorage with organization');
+  } catch (error) {
+    console.error('Error saving reports to localStorage:', error);
+  }
+};
+
+// Define a type for organized report groups
+type ReportGroup = {
+  id: string;           // Unique ID based on class, term, and academic year
+  name: string;         // Descriptive name including class, term, academic year, and generation time
+  timestamp: string;    // ISO timestamp when the report was generated
+  classReport: ClassReport; // The actual report data
+};
+
+// Helper function to load reports from localStorage
+const loadReportsFromLocalStorage = (schoolId: string): ClassReport[] => {
+  try {
+    const savedReports = localStorage.getItem(`reports_${schoolId}`);
+    if (savedReports) {
+      try {
+        // Parse the saved report groups
+        const reportGroups: ReportGroup[] = JSON.parse(savedReports);
+        
+        // Extract just the ClassReport objects from each group and filter out any invalid entries
+        return reportGroups
+          .filter(group => group && group.classReport) // Ensure group and classReport exist
+          .map(group => group.classReport);
+      } catch (parseError) {
+        console.error('Error parsing report groups:', parseError);
+        // If we can't parse the new format, try parsing the old format directly
+        const oldFormatReports = JSON.parse(savedReports);
+        if (Array.isArray(oldFormatReports)) {
+          return oldFormatReports;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading reports from localStorage:', error);
+  }
+  return [];
+};
+
+const BatchReportGenerator = ({ school, classes }: Props) => {
   const [selectedClassId, setSelectedClassId] = useState("");
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear() + "/" + (new Date().getFullYear() + 1));
   const [term, setTerm] = useState("First Term");
-  const [classReports, setClassReports] = useState([]);
-  const [expandedClass, setExpandedClass] = useState(null);
-  const [selectedReport, setSelectedReport] = useState(null);
+  const [classReports, setClassReports] = useState<ClassReport[]>([]);
+  const [expandedClass, setExpandedClass] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [availableAcademicYears, setAvailableAcademicYears] = useState<string[]>([]);
+  const [availableTerms, setAvailableTerms] = useState<string[]>([]);
+  const [dataAvailable, setDataAvailable] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleClassChange = (e) => {
+  // Load saved reports when component mounts
+  useEffect(() => {
+    if (school?.id) {
+      const savedReports = loadReportsFromLocalStorage(school.id);
+      if (savedReports && savedReports.length > 0) {
+        setClassReports(savedReports);
+        
+        // If we have completed reports, expand the first one
+        // Add null check to prevent errors with undefined status
+        const completedReports = savedReports.filter(r => r && r.status === 'completed');
+        if (completedReports.length > 0) {
+          setExpandedClass(completedReports[0].classId);
+        }
+      }
+    }
+  }, [school?.id]);
+  
+  // Function to get a descriptive name for a report
+  const getReportGroupName = (report: ClassReport): string => {
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    return `${report.className} - ${report.term} ${report.academicYear} (Generated ${formattedDate})`;
+  };
+
+  // Fetch available terms and academic years when component mounts or class changes
+  useEffect(() => {
+    if (selectedClassId) {
+      fetchAvailableData();
+    }
+  }, [selectedClassId]);
+
+  // Check if data is available for the current selection
+  useEffect(() => {
+    if (selectedClassId) {
+      checkDataAvailability();
+    }
+  }, [selectedClassId, term, academicYear]);
+
+  // Fetch available terms and academic years for the selected class
+  const fetchAvailableData = async () => {
+    setLoading(true);
+    try {
+      // Fetch all scores for the selected class to determine available terms and years
+      const { data: subjects, error: subjectsError } = await supabase
+        .from("subjects")
+        .select("id")
+        .eq("class_id", selectedClassId);
+
+      if (subjectsError) throw subjectsError;
+      if (!subjects || subjects.length === 0) {
+        setAvailableTerms([]);
+        setAvailableAcademicYears([]);
+        setDataAvailable(false);
+        setLoading(false);
+        return;
+      }
+
+      const subjectIds = subjects.map(s => s.id);
+
+      const { data: scores, error: scoresError } = await supabase
+        .from("scores")
+        .select("term, academic_year")
+        .in("subject_id", subjectIds);
+
+      if (scoresError) throw scoresError;
+
+      if (scores && scores.length > 0) {
+        // Extract unique terms and academic years
+        const terms = [...new Set(scores.map(s => s.term).filter(Boolean))];
+        const years = [...new Set(scores.map(s => s.academic_year).filter(Boolean))];
+
+        setAvailableTerms(terms);
+        setAvailableAcademicYears(years);
+
+        // Set default values if current selection is not available
+        if (terms.length > 0 && !terms.includes(term)) {
+          setTerm(terms[0]);
+        }
+
+        if (years.length > 0 && !years.includes(academicYear)) {
+          setAcademicYear(years[0]);
+        }
+      } else {
+        setAvailableTerms([]);
+        setAvailableAcademicYears([]);
+      }
+    } catch (err) {
+      console.error("Error fetching available data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if data is available for the current selection
+  const checkDataAvailability = async () => {
+    if (!selectedClassId || !term || !academicYear) {
+      setDataAvailable(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch subjects for this class
+      const { data: subjects, error: subjectsError } = await supabase
+        .from("subjects")
+        .select("id")
+        .eq("class_id", selectedClassId);
+
+      if (subjectsError) throw subjectsError;
+      if (!subjects || subjects.length === 0) {
+        setDataAvailable(false);
+        return;
+      }
+
+      const subjectIds = subjects.map(s => s.id);
+
+      // Check if scores exist for the selected term and academic year
+      const { data: scores, error: scoresError } = await supabase
+        .from("scores")
+        .select("id")
+        .in("subject_id", subjectIds)
+        .eq("term", term)
+        .eq("academic_year", academicYear);
+
+      if (scoresError) throw scoresError;
+
+      // Data is available if we have scores for the selected criteria
+      setDataAvailable(scores && scores.length > 0);
+    } catch (err) {
+      console.error("Error checking data availability:", err);
+      setDataAvailable(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedClassId(e.target.value);
+  };
+  
+  const handleTermChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTerm(e.target.value);
+  };
+  
+  const handleAcademicYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setAcademicYear(e.target.value);
   };
 
   const handleGenerateBatchReports = async () => {
-    if (!selectedClassId) return;
+    if (!selectedClassId || !academicYear || !term) {
+      alert("Please select a class, academic year, and term.");
+      return;
+    }
 
     try {
-      // Find the class name
-      const classItem = classes.find(c => c.id === selectedClassId);
-      if (!classItem) throw new Error("Class not found");
+      // Find the class details
+      const selectedClass = classes.find(c => c.id === selectedClassId);
+      if (!selectedClass) {
+        throw new Error("Selected class not found.");
+      }
 
-      // Check if we already have a report for this class
-      const existingReportIndex = classReports.findIndex(r => r.classId === selectedClassId);
-      
-      // Create or update the class report entry
-      const newClassReport = {
+      // Initialize class report
+      const newClassReport: ClassReport = {
         classId: selectedClassId,
-        className: classItem.name,
-        status: "generating",
+        className: selectedClass.name,
+        status: 'generating',
         progress: 0,
         reports: [],
         academicYear,
         term
       };
 
-      if (existingReportIndex >= 0) {
-        // Update existing report
-        const updatedReports = [...classReports];
-        updatedReports[existingReportIndex] = newClassReport;
-        setClassReports(updatedReports);
-      } else {
-        // Add new report
-        setClassReports([...classReports, newClassReport]);
-      }
+      // Add to class reports
+      setClassReports(prev => {
+        // Remove any existing report for this class
+        const filteredReports = prev.filter(r => r.classId !== selectedClassId);
+        const updatedReports = [...filteredReports, newClassReport];
+        
+        // Save to localStorage
+        if (school?.id) {
+          saveReportsToLocalStorage(school.id, updatedReports);
+        }
+        
+        return updatedReports;
+      });
 
-      // Set this class as expanded
+      // Expand this class
       setExpandedClass(selectedClassId);
 
-      // Fetch all students in this class
+      // Fetch students for this class
       const { data: students, error: studentsError } = await supabase
         .from("students")
         .select("*")
@@ -63,102 +349,112 @@ const BatchReportGenerator = ({ school, classes }) => {
       if (studentsError) throw studentsError;
 
       if (!students || students.length === 0) {
-        throw new Error("No students found in this class");
+        updateClassReportError(selectedClassId, "No students found in this class");
+        return;
       }
 
-      // Fetch all subjects for this class
+      // Update progress
+      updateClassReportProgress(selectedClassId, 10);
+
+      // Fetch subjects for this class
       const { data: subjects, error: subjectsError } = await supabase
         .from("subjects")
         .select("*")
-        .eq("class_id", selectedClassId)
-        .order("name", { ascending: true });
+        .eq("class_id", selectedClassId);
 
       if (subjectsError) throw subjectsError;
 
       if (!subjects || subjects.length === 0) {
-        throw new Error("No subjects found for this class");
+        updateClassReportError(selectedClassId, "No subjects found for this class");
+        return;
       }
+
+      // Update progress
+      updateClassReportProgress(selectedClassId, 20);
 
       // Generate reports for each student
       const generatedReports = [];
-      
-      for (let i = 0; i < students.length; i++) {
-        const student = students[i];
-        
-        // Update progress
-        const progress = Math.round(((i + 1) / students.length) * 100);
-        updateClassReportProgress(selectedClassId, progress);
-        
-        // Generate student report
+      let progress = 20;
+      const progressIncrement = 70 / students.length;
+
+      for (const student of students) {
         try {
-          const report = await generateStudentReport(student, subjects, classItem, school, academicYear, term);
+          // Find the selected class object
+          const selectedClass = classes.find((c: any) => c.id === selectedClassId);
+          if (!selectedClass) continue;
           
-          // Calculate positions
-          await calculateSubjectPositions(report, student.class_id);
-          await calculateOverallPosition(report, student.class_id);
+          // Call generateStudentReport with all required parameters in the correct order
+          const report = await generateStudentReport(student, subjects, selectedClass, school, academicYear, term);
           
+          // Calculate positions for the report
+          await calculateSubjectPositions(report, selectedClassId);
+          await calculateOverallPosition(report, selectedClassId);
           generatedReports.push(report);
+          progress += progressIncrement;
+          updateClassReportProgress(selectedClassId, Math.min(90, Math.round(progress)));
         } catch (err) {
           console.error(`Error generating report for student ${student.name}:`, err);
-          // Continue with other students
+          // Continue with other students even if one fails
         }
       }
 
-      // Sort reports by position
-      generatedReports.sort((a, b) => {
-        const aPosition = parseInt(a.position.split(" ")[0]);
-        const bPosition = parseInt(b.position.split(" ")[0]);
-        return aPosition - bPosition;
-      });
-
       // Update the class report with the generated reports
       updateClassReportCompleted(selectedClassId, generatedReports);
-    } catch (err) {
+
+    } catch (err: unknown) {
       console.error("Error generating batch reports:", err);
-      updateClassReportError(selectedClassId, err.message);
+      updateClassReportError(selectedClassId, "Error generating reports");
     }
   };
 
-  const updateClassReportProgress = (classId, progress) => {
+  const updateClassReportProgress = (classId: string, progress: number) => {
     setClassReports(prevReports => 
       prevReports.map(report => 
-        report.classId === classId 
-          ? { ...report, progress } 
-          : report
+        report.classId === classId ? 
+          { ...report, progress } : 
+          report
       )
     );
   };
 
-  const updateClassReportCompleted = (classId, reports) => {
+  const updateClassReportCompleted = (classId: string, reports: any[]) => {
+    setClassReports(prevReports => {
+      const updatedReports = prevReports.map(report => {
+        if (report.classId === classId) {
+          return {
+            ...report,
+            status: 'completed' as const,
+            progress: 100,
+            reports
+          };
+        }
+        return report;
+      });
+      
+      // Save to localStorage after updating
+      if (school?.id) {
+        saveReportsToLocalStorage(school.id, updatedReports);
+      }
+      
+      return updatedReports;
+    });
+  };
+
+  const updateClassReportError = (classId: string, errorMessage: string) => {
     setClassReports(prevReports => 
       prevReports.map(report => 
-        report.classId === classId 
-          ? { 
-              ...report, 
-              status: "completed", 
-              reports,
-              progress: 100
-            } 
-          : report
+        report.classId === classId ? 
+          { 
+            ...report, 
+            status: 'error' as const, 
+            error: errorMessage 
+          } : 
+          report
       )
     );
   };
 
-  const updateClassReportError = (classId, errorMessage) => {
-    setClassReports(prevReports => 
-      prevReports.map(report => 
-        report.classId === classId 
-          ? { 
-              ...report, 
-              status: "error", 
-              error: errorMessage
-            } 
-          : report
-      )
-    );
-  };
-
-  const toggleClassExpansion = (classId) => {
+  const toggleClassExpansion = (classId: string) => {
     if (expandedClass === classId) {
       setExpandedClass(null);
     } else {
@@ -166,41 +462,40 @@ const BatchReportGenerator = ({ school, classes }) => {
     }
   };
 
-  const viewReport = (report) => {
+  const viewReport = (report: any) => {
     setSelectedReport(report);
   };
 
-  const downloadAllReports = (classId) => {
-    const classReport = classReports.find(r => r.classId === classId);
-    if (!classReport || classReport.status !== "completed") return;
-    
-    // Create a zip file with all reports
-    const zip = new JSZip();
-    
-    // Add each report to the zip file
-    classReport.reports.forEach(report => {
-      // Generate HTML content for the report
-      const reportHtml = generateReportHtml(report);
+  const downloadAllReports = async (classId: string) => {
+    const classReport = classReports.find(report => report.classId === classId);
+    if (!classReport || classReport.status !== 'completed') return;
+
+    try {
+      const zip = new JSZip();
       
-      // Add the report to the zip file
-      const fileName = `${report.student.name.replace(/\s+/g, '_')}_${classReport.term}_${classReport.academicYear}.html`;
-      zip.file(fileName, reportHtml);
-    });
-    
-    // Generate the zip file
-    zip.generateAsync({ type: 'blob' }).then(content => {
-      // Create a download link
-      const url = URL.createObjectURL(content);
+      // Add each report to the zip file
+      classReport.reports.forEach(report => {
+        const html = generateReportHtml(report);
+        zip.file(`${report.student.name.replace(/\s+/g, '_')}_Report.html`, html);
+      });
+      
+      // Generate the zip file
+      const content = await zip.generateAsync({ type: 'blob' });
+      
+      // Create a download link and trigger the download
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `${classReport.className}_Reports_${classReport.term}_${classReport.academicYear}.zip`;
+      link.href = URL.createObjectURL(content);
+      link.download = `${classReport.className}_${classReport.term}_${classReport.academicYear}_Reports.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    });
+    } catch (error) {
+      console.error('Error downloading reports:', error);
+      alert('Error downloading reports. Please try again.');
+    }
   };
 
-  const generateReportHtml = (report) => {
+  const generateReportHtml = (report: any) => {
     // Generate HTML content for the report
     return `
       <!DOCTYPE html>
@@ -287,8 +582,8 @@ const BatchReportGenerator = ({ school, classes }) => {
                 ${report.subjects.map((subject, index) => `
                   <tr>
                     <td>${subject.subject_name}</td>
-                    <td align="center">${subject.continuous_assessment}</td>
-                    <td align="center">${subject.exam_score}</td>
+                    <td align="center">${subject.continuous_assessment * 0.5}</td>
+                    <td align="center">${subject.exam_score * 0.5}</td>
                     <td align="center"><strong>${subject.total_score}</strong></td>
                     <td align="center">${subject.grade}</td>
                     <td align="center">${subject.position}</td>
@@ -311,15 +606,15 @@ const BatchReportGenerator = ({ school, classes }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>80-100</td><td>1</td><td>Highly Proficient (HP)</td></tr>
-                  <tr><td>75-79</td><td>2</td><td>Highly Proficient (HP)</td></tr>
-                  <tr><td>70-74</td><td>3</td><td>Proficient (P)</td></tr>
-                  <tr><td>65-69</td><td>4</td><td>Proficient (P)</td></tr>
-                  <tr><td>60-64</td><td>5</td><td>Proficient (P)</td></tr>
-                  <tr><td>50-59</td><td>6</td><td>Approaching Proficiency (AP)</td></tr>
-                  <tr><td>45-49</td><td>7</td><td>Developing (D)</td></tr>
-                  <tr><td>40-44</td><td>8</td><td>Developing (D)</td></tr>
-                  <tr><td>0-39</td><td>9</td><td>Emerging (E)</td></tr>
+                  <tr><td>80-100</td><td>1</td><td>Excellent</td></tr>
+                  <tr><td>75-79</td><td>2</td><td>Very Good</td></tr>
+                  <tr><td>70-74</td><td>3</td><td>Good</td></tr>
+                  <tr><td>65-69</td><td>4</td><td>Credit</td></tr>
+                  <tr><td>60-64</td><td>5</td><td>Average</td></tr>
+                  <tr><td>50-59</td><td>6</td><td>Below Average</td></tr>
+                  <tr><td>45-49</td><td>7</td><td>Pass</td></tr>
+                  <tr><td>40-44</td><td>8</td><td>Developing</td></tr>
+                  <tr><td>0-39</td><td>9</td><td>Emerging</td></tr>
                 </tbody>
               </table>
             </div>
@@ -328,7 +623,7 @@ const BatchReportGenerator = ({ school, classes }) => {
               <h3>Comments</h3>
               <div class="comments">
                 <p><strong>Class Teacher's Comment:</strong> </p>
-                <p style="margin-top: 30px;"><strong>Principal's Comment:</strong> </p>
+                <p style="margin-top: 30px;"><strong>HeadTeacher's Comment:</strong> </p>
               </div>
               
               <div class="signatures">
@@ -336,7 +631,7 @@ const BatchReportGenerator = ({ school, classes }) => {
                   <div class="signature-line">Class Teacher's Signature</div>
                 </div>
                 <div class="signature">
-                  <div class="signature-line">Principal's Signature</div>
+                  <div class="signature-line">HeadTeacher's Signature</div>
                 </div>
               </div>
             </div>
@@ -352,92 +647,104 @@ const BatchReportGenerator = ({ school, classes }) => {
   };
 
   return (
-    <>
-      <div className="mb-6 p-6 border border-gray-200 rounded-lg bg-gray-50">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Batch Report Cards</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label htmlFor="batchClass" className="block text-sm font-medium text-gray-700 mb-1">
-              Select Class
-            </label>
-            <select
-              id="batchClass"
-              value={selectedClassId}
-              onChange={handleClassChange}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="">-- Select Class --</option>
-              {classes.map((classItem) => (
-                <option key={classItem.id} value={classItem.id}>
-                  {classItem.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="batchAcademicYear" className="block text-sm font-medium text-gray-700 mb-1">
-              Academic Year
-            </label>
-            <input
-              id="batchAcademicYear"
-              type="text"
-              value={academicYear}
-              onChange={(e) => setAcademicYear(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., 2024/2025"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="batchTerm" className="block text-sm font-medium text-gray-700 mb-1">
-              Term/Semester
-            </label>
-            <select
-              id="batchTerm"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="First Term">First Term</option>
-              <option value="Second Term">Second Term</option>
-              <option value="Third Term">Third Term</option>
-            </select>
-          </div>
+    <div className="mb-6 p-6 border border-gray-200 rounded-lg bg-gray-50">
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Batch Report Cards</h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label htmlFor="batchClass" className="block text-sm font-medium text-gray-700 mb-1">
+            Select Class
+          </label>
+          <select
+            id="batchClass"
+            value={selectedClassId}
+            onChange={handleClassChange}
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          >
+            <option value="">-- Select Class --</option>
+            {classes.map((classItem: any) => (
+              <option key={classItem.id} value={classItem.id}>
+                {classItem.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            onClick={handleGenerateBatchReports}
-            disabled={!selectedClassId}
-            className={`px-4 py-2 rounded-md flex items-center ${
-              !selectedClassId
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+        <div>
+          <label htmlFor="batchTerm" className="block text-sm font-medium text-gray-700 mb-1">
+            Term/Semester
+          </label>
+          <select
+            id="batchTerm"
+            value={term}
+            onChange={handleTermChange}
+            disabled={availableTerms.length === 0 || !selectedClassId}
+            className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${(availableTerms.length === 0 || !selectedClassId) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           >
-            <Users className="w-4 h-4 mr-2" />
-            Generate Class Reports
-          </button>
+            {availableTerms.length > 0 ? (
+              availableTerms.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))
+            ) : (
+              <option value="">No terms available</option>
+            )}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="batchAcademicYear" className="block text-sm font-medium text-gray-700 mb-1">
+            Academic Year
+          </label>
+          <select
+            id="batchAcademicYear"
+            value={academicYear}
+            onChange={handleAcademicYearChange}
+            disabled={availableAcademicYears.length === 0 || !selectedClassId}
+            className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${(availableAcademicYears.length === 0 || !selectedClassId) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+          >
+            {availableAcademicYears.length > 0 ? (
+              availableAcademicYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))
+            ) : (
+              <option value="">No academic years available</option>
+            )}
+          </select>
         </div>
       </div>
 
-      <div className="mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Class Report Cards</h3>
-        
-        {classReports.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-            <Folder className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No reports generated yet</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Select a class and generate reports to see them here.
-            </p>
-          </div>
-        ) : (
+      {loading && (
+        <div className="flex justify-center my-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+
+      {selectedClassId && !loading && !dataAvailable && (
+        <div className="mb-4 p-3 bg-yellow-50 text-yellow-700 rounded-md">
+          No data available for the selected term and academic year. Please select different criteria or upload data first.
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleGenerateBatchReports}
+          disabled={!selectedClassId || !dataAvailable || loading}
+          className={`px-4 py-2 rounded-md flex items-center ${!selectedClassId || !dataAvailable || loading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+        >
+          Generate Class Reports
+        </button>
+      </div>
+
+      {classReports.length > 0 && (
+        <div className="mt-8">
+          <h4 className="text-lg font-medium text-gray-900 mb-4">Generated Reports</h4>
           <div className="space-y-4">
             {classReports.map((classReport) => (
-              <div key={classReport.classId} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div key={classReport.classId} className="mb-4 overflow-hidden border rounded-lg">
                 <div 
                   className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
                   onClick={() => toggleClassExpansion(classReport.classId)}
@@ -460,7 +767,7 @@ const BatchReportGenerator = ({ school, classes }) => {
                         {classReport.status === 'generating' 
                           ? `Generating reports (${classReport.progress}%)` 
                           : classReport.status === 'completed'
-                          ? `${classReport.reports.length} reports generated`
+                          ? `${classReport.reports.length} reports - ${classReport.term} ${classReport.academicYear}`
                           : classReport.status === 'error'
                           ? 'Error generating reports'
                           : 'Pending generation'}
@@ -469,18 +776,16 @@ const BatchReportGenerator = ({ school, classes }) => {
                   </div>
                   <div className="flex items-center">
                     {classReport.status === 'completed' && (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            downloadAllReports(classReport.classId);
-                          }}
-                          className="mr-2 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-                        >
-                          <Download className="w-3 h-3 mr-1" />
-                          Download All
-                        </button>
-                      </>
+                      <button
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          downloadAllReports(classReport.classId);
+                        }}
+                        className="mr-2 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        Download All
+                      </button>
                     )}
                     {expandedClass === classReport.classId ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -519,8 +824,8 @@ const BatchReportGenerator = ({ school, classes }) => {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {selectedReport && (
         <ReportCardModal 
@@ -528,7 +833,7 @@ const BatchReportGenerator = ({ school, classes }) => {
           onClose={() => setSelectedReport(null)} 
         />
       )}
-    </>
+    </div>
   );
 };
 

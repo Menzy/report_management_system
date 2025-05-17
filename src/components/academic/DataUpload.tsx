@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { supabase, Class, Subject, StudentRecord, ASSESSMENT_TYPES } from '../../lib/supabase';
+import { supabase, Class, Subject, StudentRecord, ASSESSMENT_TYPES, TERMS, getCurrentAcademicYear } from '../../lib/supabase';
 import { ArrowLeft, Upload, FileSpreadsheet, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -8,6 +8,9 @@ type DataUploadProps = {
   classItem: Class;
   subject: Subject;
   onBack: () => void;
+  onDataChanged?: () => void;
+  selectedTerm?: string;
+  academicYear?: string;
 };
 
 type ValidationError = {
@@ -16,13 +19,15 @@ type ValidationError = {
   message: string;
 };
 
-const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack }) => {
+const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, onBack, onDataChanged, selectedTerm: initialTerm, academicYear: initialAcademicYear }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<StudentRecord[]>([]);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'validating' | 'uploading' | 'success' | 'error'>('idle');
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedTerm, setSelectedTerm] = useState<string>(initialTerm || TERMS[0]);
+  const [academicYear, setAcademicYear] = useState<string>(initialAcademicYear || getCurrentAcademicYear());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +56,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
   const parseFile = async (file: File) => {
     setUploadStatus('validating');
     setValidationErrors([]);
+    
+    // Reset any previous data
+    setPreviewData([]);
     
     try {
       const data = await file.arrayBuffer();
@@ -127,7 +135,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
         const record: StudentRecord = {
           student_id: studentId.toString(),
           name: studentName.toString(),
-          scores: {}
+          scores: {},
+          term: row['TERM'] || selectedTerm, // Use the current selectedTerm if not in file
+          academic_year: row['ACADEMIC YEAR'] || academicYear // Use the current academicYear if not in file
         };
         
         // Process all possible assessment columns
@@ -204,19 +214,27 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     setUploadStatus('uploading');
     setUploadProgress(0);
     
+    // Update all preview data with the current term and academic year
+    // This ensures that any changes to the term/year dropdowns are reflected
+    const updatedPreviewData = previewData.map(record => ({
+      ...record,
+      term: selectedTerm,
+      academic_year: academicYear
+    }));
+    setPreviewData(updatedPreviewData);
+    
     try {
       // Process each student record
       for (let i = 0; i < previewData.length; i++) {
         const record = previewData[i];
         
-        // Check if student exists - using select() instead of single() to avoid errors
+        // Check if student exists in this school (regardless of class)
         let studentId: string;
         const { data: existingStudents, error: lookupError } = await supabase
           .from('students')
-          .select('id')
+          .select('id, class_id')
           .eq('student_id', record.student_id)
-          .eq('school_id', schoolId)
-          .eq('class_id', classItem.id);
+          .eq('school_id', schoolId);
         
         if (lookupError) {
           console.error('Error looking up student:', lookupError);
@@ -224,47 +242,121 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
         }
         
         if (existingStudents && existingStudents.length > 0) {
-          // Student exists
+          // Student exists in this school
           studentId = existingStudents[0].id;
+          
+          // Update the student's class if needed
+          const existingClassId = existingStudents[0].class_id as string;
+          if (existingClassId !== classItem.id) {
+            const { error: updateError } = await supabase
+              .from('students')
+              .update({ class_id: classItem.id, name: record.name })
+              .eq('id', studentId);
+              
+            if (updateError) {
+              console.error('Error updating student class:', updateError);
+              throw updateError;
+            }
+          }
         } else {
           // Create new student
-          const { data: newStudent, error: studentError } = await supabase
-            .from('students')
-            .insert({
-              student_id: record.student_id,
-              name: record.name,
-              class_id: classItem.id,
-              school_id: schoolId
-            })
-            .select('id')
-            .single();
-          
-          if (studentError) throw studentError;
-          studentId = newStudent.id;
+          try {
+            const { data: newStudent, error: studentError } = await supabase
+              .from('students')
+              .insert({
+                student_id: record.student_id,
+                name: record.name,
+                class_id: classItem.id,
+                school_id: schoolId
+              })
+              .select('id')
+              .single();
+            
+            if (studentError) throw studentError;
+            studentId = newStudent.id;
+          } catch (error: any) {
+            // If we get a duplicate key error, try to fetch the student again
+            // This handles race conditions in case another upload just created this student
+            if (error.code === '23505') {
+              const { data: retryStudents, error: retryError } = await supabase
+                .from('students')
+                .select('id')
+                .eq('student_id', record.student_id)
+                .eq('school_id', schoolId);
+                
+              if (retryError) throw retryError;
+              if (retryStudents && retryStudents.length > 0) {
+                studentId = retryStudents[0].id;
+              } else {
+                throw error; // Re-throw if we still can't find the student
+              }
+            } else {
+              throw error; // Re-throw other errors
+            }
+          }
         }
         
-        // Delete existing scores for this student and subject
-        await supabase
+        // First, check if we're dealing with a duplicate upload by comparing with existing data
+        const { data: existingScores, error: fetchError } = await supabase
           .from('scores')
-          .delete()
+          .select('assessment_type')
           .eq('student_id', studentId)
-          .eq('subject_id', subject.id);
+          .eq('subject_id', subject.id)
+          .eq('term', selectedTerm)
+          .eq('academic_year', academicYear);
         
-        // Insert new scores
-        const scoreInserts = Object.entries(record.scores).map(([assessmentType, score]) => ({
-          student_id: studentId,
-          subject_id: subject.id,
-          assessment_type: assessmentType,
-          score: score,
-          max_score: 100
-        }));
+        if (fetchError) {
+          console.error('Error fetching existing scores:', fetchError);
+          throw fetchError;
+        }
+        
+        // If we already have scores for this student/subject/term/year, delete them before inserting new ones
+        if (existingScores && existingScores.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('scores')
+            .delete()
+            .eq('student_id', studentId)
+            .eq('subject_id', subject.id)
+            .eq('term', selectedTerm)
+            .eq('academic_year', academicYear);
+          
+          if (deleteError) {
+            console.error('Error deleting existing scores:', deleteError);
+            throw deleteError;
+          }
+        }
+        
+        // Insert new scores with term and academic year
+        console.log('Using term:', selectedTerm);
+        console.log('Using academic year:', academicYear);
+        
+        // Filter out duplicate assessment types to ensure we only insert one record per assessment type
+        // This prevents the multiplication of records
+        const uniqueAssessmentTypes = new Set(Object.keys(record.scores));
+        const scoreInserts = Array.from(uniqueAssessmentTypes).map(assessmentType => {
+          const score = record.scores[assessmentType];
+          const insertData = {
+            student_id: studentId,
+            subject_id: subject.id,
+            assessment_type: assessmentType,
+            score: score,
+            max_score: 100,
+            term: selectedTerm,
+            academic_year: academicYear
+          };
+          console.log('Inserting score with data:', insertData);
+          return insertData;
+        });
         
         if (scoreInserts.length > 0) {
           const { error: scoresError } = await supabase
             .from('scores')
             .insert(scoreInserts);
           
-          if (scoresError) throw scoresError;
+          if (scoresError) {
+            console.error('Error inserting scores:', scoresError);
+            throw scoresError;
+          }
         }
         
         // Update progress
@@ -272,6 +364,9 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
       }
       
       setUploadStatus('success');
+      if (onDataChanged) {
+        onDataChanged(); // Trigger data refresh after successful upload
+      }
     } catch (error) {
       console.error('Error uploading data:', error);
       setErrorMessage('Failed to upload data. Please try again.');
@@ -287,17 +382,17 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     const headers = [
       'STUDENT REGISTER ID',
       'STUDENT NAME',
-      'TEST 1',
-      'TEST 2',
-      'EXAM',
-      'ATTENDANCE'
+      ...ASSESSMENT_TYPES,
+      'ATTENDANCE',
+      'TERM',
+      'ACADEMIC YEAR'
     ];
     
     // Create sample data
     const data = [
       headers,
-      ['STD001', 'John Doe', 75, 80, 85, 90],
-      ['STD002', 'Jane Smith', 82, 78, 88, 95]
+      ['STD001', 'John Doe', 75, 80, 60, 90, 85, 90],
+      ['STD002', 'Jane Smith', 82, 78, 71, 83, 88, 95]
     ];
     
     // Create worksheet
@@ -319,6 +414,13 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDataChanged = () => {
+    // Notify parent component that data has changed
+    if (onDataChanged) {
+      onDataChanged();
     }
   };
 
@@ -534,6 +636,37 @@ const DataUpload: React.FC<DataUploadProps> = ({ schoolId, classItem, subject, o
               </div>
             </div>
           )}
+
+          <div className="mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                <select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    console.log('Term changed to:', e.target.value);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {TERMS.map((term) => (
+                    <option key={term} value={term}>{term}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  placeholder="e.g. 2024/2025"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Format: YYYY/YYYY (e.g. 2024/2025)</p>
+              </div>
+            </div>
+          </div>
 
           <div className="flex justify-end space-x-4">
             <button

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, Class, Subject } from '../../lib/supabase';
-import { Plus, Trash2, ArrowLeft, FileSpreadsheet, Upload } from 'lucide-react';
-import DataUpload from './DataUpload';
+import { Plus, Trash2, ArrowLeft, FileSpreadsheet, X, Pen, Eye, CheckCircle } from 'lucide-react';
+import PreviousUploads from './PreviousUploads';
 
 type SubjectManagementProps = {
   schoolId: string;
@@ -13,69 +13,99 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newSubjectName, setNewSubjectName] = useState('');
+  const [newSubjectFields, setNewSubjectFields] = useState<string[]>(['']);
   const [isAddingSubject, setIsAddingSubject] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
+  const [editingSubject, setEditingSubject] = useState<{id: string, name: string} | null>(null);
+
+  const fetchSubjects = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('subjects')
+        .select('*')
+        .eq('class_id', classItem.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setSubjects(data as Subject[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load subjects');
+      console.error('Error fetching subjects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSubjects = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('subjects')
-          .select('*')
-          .eq('class_id', classItem.id)
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-        setSubjects(data as Subject[]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load subjects');
-        console.error('Error fetching subjects:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchSubjects();
   }, [classItem.id]);
 
-  const handleAddSubject = async () => {
-    if (!newSubjectName.trim()) return;
+  const handleAddField = () => {
+    setNewSubjectFields([...newSubjectFields, '']);
+  };
+
+  const handleRemoveField = (index: number) => {
+    setNewSubjectFields(newSubjectFields.filter((_, i) => i !== index));
+  };
+
+  const handleFieldChange = (index: number, value: string) => {
+    const updatedFields = [...newSubjectFields];
+    updatedFields[index] = value;
+    setNewSubjectFields(updatedFields);
+  };
+
+  const handleAddSubjects = async () => {
+    const validSubjects = newSubjectFields.filter(name => name.trim() !== '');
+    if (validSubjects.length === 0) return;
 
     try {
       const { data, error } = await supabase
         .from('subjects')
-        .insert({
-          name: newSubjectName.trim(),
-          class_id: classItem.id,
-          school_id: schoolId
-        })
+        .insert(
+          validSubjects.map(name => ({
+            name: name.trim(),
+            class_id: classItem.id,
+            school_id: schoolId
+          }))
+        )
         .select();
 
       if (error) throw error;
       
-      setSubjects([...subjects, data[0] as Subject]);
-      setNewSubjectName('');
+      setSubjects([...subjects, ...(data as Subject[])]);
+      setNewSubjectFields(['']);
       setIsAddingSubject(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add subject');
-      console.error('Error adding subject:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add subjects');
+      console.error('Error adding subjects:', err);
     }
   };
 
   const handleDeleteSubject = async (subjectId: string) => {
-    if (!confirm('Are you sure you want to delete this subject? This will also delete all associated scores.')) {
+    if (!confirm('Are you sure you want to delete this subject and all associated scores? This action cannot be undone.')) {
       return;
     }
-
+    
     try {
-      const { error } = await supabase
+      // First, delete all scores associated with this subject
+      const { error: scoresError } = await supabase
+        .from('scores')
+        .delete()
+        .eq('subject_id', subjectId);
+
+      if (scoresError) {
+        console.error('Error deleting associated scores:', scoresError);
+        throw scoresError;
+      }
+      
+      // Then delete the subject itself
+      const { error: subjectError } = await supabase
         .from('subjects')
         .delete()
         .eq('id', subjectId);
 
-      if (error) throw error;
+      if (subjectError) throw subjectError;
       
       setSubjects(subjects.filter(s => s.id !== subjectId));
       if (selectedSubject?.id === subjectId) {
@@ -95,6 +125,29 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
     setSelectedSubject(null);
   };
 
+  const handleEditSubject = async () => {
+    if (!editingSubject) return;
+
+    try {
+      const { error } = await supabase
+        .from('subjects')
+        .update({ name: editingSubject.name.trim() })
+        .eq('id', editingSubject.id);
+
+      if (error) throw error;
+      
+      setSubjects(subjects.map(s => 
+        s.id === editingSubject.id 
+          ? { ...s, name: editingSubject.name.trim() } 
+          : s
+      ));
+      setEditingSubject(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update subject');
+      console.error('Error updating subject:', err);
+    }
+  };
+
   if (loading && subjects.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -106,10 +159,11 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
 
   if (selectedSubject) {
     return (
-      <DataUpload 
+      <PreviousUploads 
         schoolId={schoolId}
         classItem={classItem}
         subject={selectedSubject}
+        onDataChanged={() => fetchSubjects()}
         onBack={handleBackToSubjects}
       />
     );
@@ -144,26 +198,51 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
 
       {isAddingSubject && (
         <div className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Subject</h3>
-          <div className="flex">
-            <input
-              type="text"
-              value={newSubjectName}
-              onChange={(e) => setNewSubjectName(e.target.value)}
-              placeholder="Subject name (e.g., Mathematics, English, Science)"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
+          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Subjects</h3>
+          <div className="space-y-3">
+            {newSubjectFields.map((field, index) => (
+              <div key={index} className="flex items-center">
+                <input
+                  type="text"
+                  value={field}
+                  onChange={(e) => handleFieldChange(index, e.target.value)}
+                  placeholder="Subject name (e.g., Mathematics, English, Science)"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+                {newSubjectFields.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveField(index)}
+                    className="ml-2 p-2 text-gray-500 hover:text-red-500 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                {index === newSubjectFields.length - 1 && (
+                  <button
+                    onClick={handleAddField}
+                    className="ml-2 p-2 text-blue-500 hover:text-blue-700 hover:bg-gray-100 rounded-full"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
             <button
-              onClick={handleAddSubject}
-              className="ml-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setIsAddingSubject(false)}
-              className="ml-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              onClick={() => {
+                setNewSubjectFields(['']);
+                setIsAddingSubject(false);
+              }}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
             >
               Cancel
+            </button>
+            <button
+              onClick={handleAddSubjects}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Add Subjects
             </button>
           </div>
         </div>
@@ -194,23 +273,61 @@ const SubjectManagement: React.FC<SubjectManagementProps> = ({ schoolId, classIt
               className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-2">
-                <h3 className="text-lg font-medium text-gray-900">{subject.name}</h3>
-                <div className="flex space-x-1">
-                  <button
-                    onClick={() => handleDeleteSubject(subject.id)}
-                    className="p-1 text-gray-400 hover:text-red-500"
-                    title="Delete subject"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {editingSubject?.id === subject.id ? (
+                  <input
+                    type="text"
+                    value={editingSubject.name}
+                    onChange={(e) => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleEditSubject();
+                      if (e.key === 'Escape') setEditingSubject(null);
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <h3 className="text-lg font-medium text-gray-900">{subject.name}</h3>
+                )}
+                <div className="flex space-x-2">
+                  {editingSubject?.id === subject.id ? (
+                    <>
+                      <button
+                        onClick={handleEditSubject}
+                        className="p-1 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingSubject(null)}
+                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setEditingSubject({ id: subject.id, name: subject.name })}
+                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <Pen className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSubject(subject.id)}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <button
                 onClick={() => handleSelectSubject(subject)}
-                className="mt-3 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 flex items-center justify-center"
+                className="w-full mt-2 flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
               >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload Data
+                <Eye className="w-4 h-4 mr-2" />
+                View
               </button>
             </div>
           ))}

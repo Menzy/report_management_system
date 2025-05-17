@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, Class } from '../../lib/supabase';
-import { Plus, Trash2, Edit, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Edit, BookOpen, X, Pen, CheckCircle } from 'lucide-react';
 import SubjectManagement from './SubjectManagement';
 
 type ClassManagementProps = {
@@ -11,9 +11,10 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newClassName, setNewClassName] = useState('');
+  const [newClassFields, setNewClassFields] = useState<string[]>(['']);
   const [isAddingClass, setIsAddingClass] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [editingClass, setEditingClass] = useState<{id: string, name: string} | null>(null);
 
   useEffect(() => {
     if (!schoolId) return;
@@ -40,26 +41,66 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
     fetchClasses();
   }, [schoolId]);
 
-  const handleAddClass = async () => {
-    if (!newClassName.trim()) return;
+  const handleAddField = () => {
+    setNewClassFields([...newClassFields, '']);
+  };
+
+  const handleRemoveField = (index: number) => {
+    setNewClassFields(newClassFields.filter((_, i) => i !== index));
+  };
+
+  const handleFieldChange = (index: number, value: string) => {
+    const updatedFields = [...newClassFields];
+    updatedFields[index] = value;
+    setNewClassFields(updatedFields);
+  };
+
+  const handleAddClasses = async () => {
+    const validClasses = newClassFields.filter(name => name.trim() !== '');
+    if (validClasses.length === 0) return;
 
     try {
       const { data, error } = await supabase
         .from('classes')
-        .insert({
-          name: newClassName.trim(),
-          school_id: schoolId
-        })
+        .insert(
+          validClasses.map(name => ({
+            name: name.trim(),
+            school_id: schoolId
+          }))
+        )
         .select();
 
       if (error) throw error;
       
-      setClasses([...classes, data[0] as Class]);
-      setNewClassName('');
+      setClasses([...classes, ...(data as Class[])]);
+      setNewClassFields(['']);
       setIsAddingClass(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add class');
-      console.error('Error adding class:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add classes');
+      console.error('Error adding classes:', err);
+    }
+  };
+
+  const handleEditClass = async () => {
+    if (!editingClass) return;
+
+    try {
+      const { error } = await supabase
+        .from('classes')
+        .update({ name: editingClass.name.trim() })
+        .eq('id', editingClass.id);
+
+      if (error) throw error;
+      
+      setClasses(classes.map(c => 
+        c.id === editingClass.id 
+          ? { ...c, name: editingClass.name.trim() } 
+          : c
+      ));
+      setEditingClass(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update class');
+      console.error('Error updating class:', err);
     }
   };
 
@@ -134,26 +175,51 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
 
       {isAddingClass && (
         <div className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Class</h3>
-          <div className="flex">
-            <input
-              type="text"
-              value={newClassName}
-              onChange={(e) => setNewClassName(e.target.value)}
-              placeholder="Class name (e.g., Grade 1, JSS 1, Primary 1)"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
+          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Classes</h3>
+          <div className="space-y-3">
+            {newClassFields.map((field, index) => (
+              <div key={index} className="flex items-center">
+                <input
+                  type="text"
+                  value={field}
+                  onChange={(e) => handleFieldChange(index, e.target.value)}
+                  placeholder="Class name (e.g., Grade 1, JSS 1, Primary 1)"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+                {newClassFields.length > 1 && (
+                  <button
+                    onClick={() => handleRemoveField(index)}
+                    className="ml-2 p-2 text-gray-500 hover:text-red-500 hover:bg-gray-100 rounded-full"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                {index === newClassFields.length - 1 && (
+                  <button
+                    onClick={handleAddField}
+                    className="ml-2 p-2 text-blue-500 hover:text-blue-700 hover:bg-gray-100 rounded-full"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
             <button
-              onClick={handleAddClass}
-              className="ml-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setIsAddingClass(false)}
-              className="ml-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              onClick={() => {
+                setNewClassFields(['']);
+                setIsAddingClass(false);
+              }}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
             >
               Cancel
+            </button>
+            <button
+              onClick={handleAddClasses}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Add Classes
             </button>
           </div>
         </div>
@@ -184,15 +250,53 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
               className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-2">
-                <h3 className="text-lg font-medium text-gray-900">{classItem.name}</h3>
-                <div className="flex space-x-1">
-                  <button
-                    onClick={() => handleDeleteClass(classItem.id)}
-                    className="p-1 text-gray-400 hover:text-red-500"
-                    title="Delete class"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {editingClass?.id === classItem.id ? (
+                  <input
+                    type="text"
+                    value={editingClass.name}
+                    onChange={(e) => setEditingClass({ ...editingClass, name: e.target.value })}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleEditClass();
+                      if (e.key === 'Escape') setEditingClass(null);
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <h3 className="text-lg font-medium text-gray-900">{classItem.name}</h3>
+                )}
+                <div className="flex space-x-2">
+                  {editingClass?.id === classItem.id ? (
+                    <>
+                      <button
+                        onClick={handleEditClass}
+                        className="p-1 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingClass(null)}
+                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setEditingClass({ id: classItem.id, name: classItem.name })}
+                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <Pen className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClass(classItem.id)}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-gray-100 rounded-full"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <button

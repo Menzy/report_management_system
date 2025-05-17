@@ -103,15 +103,15 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
                 </tr>
               </thead>
               <tbody className="text-xs">
-                <tr><td className="border border-gray-300 px-2 py-1">80-100</td><td className="border border-gray-300 px-2 py-1">1</td><td className="border border-gray-300 px-2 py-1">Highly Proficient (HP)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">75-79</td><td className="border border-gray-300 px-2 py-1">2</td><td className="border border-gray-300 px-2 py-1">Highly Proficient (HP)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">70-74</td><td className="border border-gray-300 px-2 py-1">3</td><td className="border border-gray-300 px-2 py-1">Proficient (P)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">65-69</td><td className="border border-gray-300 px-2 py-1">4</td><td className="border border-gray-300 px-2 py-1">Proficient (P)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">60-64</td><td className="border border-gray-300 px-2 py-1">5</td><td className="border border-gray-300 px-2 py-1">Proficient (P)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">50-59</td><td className="border border-gray-300 px-2 py-1">6</td><td className="border border-gray-300 px-2 py-1">Approaching Proficiency (AP)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">45-49</td><td className="border border-gray-300 px-2 py-1">7</td><td className="border border-gray-300 px-2 py-1">Developing (D)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">40-44</td><td className="border border-gray-300 px-2 py-1">8</td><td className="border border-gray-300 px-2 py-1">Developing (D)</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">0-39</td><td className="border border-gray-300 px-2 py-1">9</td><td className="border border-gray-300 px-2 py-1">Emerging (E)</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">80-100</td><td className="border border-gray-300 px-2 py-1">1</td><td className="border border-gray-300 px-2 py-1">Excellent</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">75-79</td><td className="border border-gray-300 px-2 py-1">2</td><td className="border border-gray-300 px-2 py-1">Very Good</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">70-74</td><td className="border border-gray-300 px-2 py-1">3</td><td className="border border-gray-300 px-2 py-1">Good</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">65-69</td><td className="border border-gray-300 px-2 py-1">4</td><td className="border border-gray-300 px-2 py-1">Credit</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">60-64</td><td className="border border-gray-300 px-2 py-1">5</td><td className="border border-gray-300 px-2 py-1">Average</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">50-59</td><td className="border border-gray-300 px-2 py-1">6</td><td className="border border-gray-300 px-2 py-1">Below Average</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">45-49</td><td className="border border-gray-300 px-2 py-1">7</td><td className="border border-gray-300 px-2 py-1">Pass</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">40-44</td><td className="border border-gray-300 px-2 py-1">8</td><td className="border border-gray-300 px-2 py-1">Developing</td></tr>
+                <tr><td className="border border-gray-300 px-2 py-1">0-39</td><td className="border border-gray-300 px-2 py-1">9</td><td className="border border-gray-300 px-2 py-1">Emerging</td></tr>
               </tbody>
             </table>
           </div>
@@ -120,7 +120,7 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
             <h3 className="text-md font-semibold mb-2">Comments</h3>
             <div className="border border-gray-300 p-2 h-40">
               <p className="text-sm mb-2"><span className="font-semibold">Class Teacher's Comment:</span> </p>
-              <p className="text-sm mt-6"><span className="font-semibold">Principal's Comment:</span> </p>
+              <p className="text-sm mt-6"><span className="font-semibold">HeadTeacher's Comment:</span> </p>
             </div>
             
             <div className="mt-4 grid grid-cols-2 gap-4">
@@ -131,7 +131,7 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
               </div>
               <div className="text-center">
                 <div className="border-t border-gray-400 pt-1 mt-8">
-                  <p className="text-sm">Principal's Signature</p>
+                  <p className="text-sm">HeadTeacher's Signature</p>
                 </div>
               </div>
             </div>

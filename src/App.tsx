@@ -9,38 +9,59 @@ import { GraduationCap } from 'lucide-react';
 function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
-  const [isLoginMode, setIsLoginMode] = useState(true); // true for sign-in, false for sign-up
+  const [initialized, setInitialized] = useState(false);
+
 
   useEffect(() => {
+    // Prevent multiple initializations
+    if (initialized) return;
+
     // Check for an existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
+        setOnboardingLoading(true);
         checkOnboardingStatus(session.user.id);
         setShowLanding(false);
       }
       setLoading(false);
+      setInitialized(true);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes but only for real auth events, not tab focus
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        if (session) {
-          checkOnboardingStatus(session.user.id);
-          setShowLanding(false);
-        } else {
-          setHasCompletedOnboarding(false);
+      (event, session) => {
+        // Only process meaningful auth events
+        if (['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event)) {
+          console.log('Auth event:', event);
+          setSession(session);
+          if (session) {
+            setOnboardingLoading(true);
+            checkOnboardingStatus(session.user.id);
+            setShowLanding(false);
+          } else {
+            setHasCompletedOnboarding(null);
+          }
         }
       }
     );
 
+    // Handle visibility change to prevent unnecessary refreshes
+    const handleVisibilityChange = () => {
+      // Do nothing when the page becomes visible again
+      // This prevents re-authentication checks on tab focus
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [initialized]);
 
   const checkOnboardingStatus = async (userId: string) => {
     try {
@@ -52,12 +73,15 @@ function App() {
 
       if (error) {
         console.error('Error checking onboarding status:', error);
-        return;
+        setHasCompletedOnboarding(false);
+      } else {
+        setHasCompletedOnboarding(data?.has_completed_onboarding || false);
       }
-
-      setHasCompletedOnboarding(data?.has_completed_onboarding || false);
     } catch (error) {
       console.error('Error checking onboarding status:', error);
+      setHasCompletedOnboarding(false);
+    } finally {
+      setOnboardingLoading(false);
     }
   };
 
@@ -76,7 +100,7 @@ function App() {
     setShowLanding(true);
   };
 
-  if (loading) {
+  if (loading || onboardingLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="p-8 text-center">
@@ -117,7 +141,7 @@ function App() {
           </div>
           <AuthForm onSuccess={handleAuthSuccess} initialIsLogin={isLoginMode} />
         </div>
-      ) : !hasCompletedOnboarding ? (
+      ) : hasCompletedOnboarding === false ? (
         <div className="flex flex-col items-center justify-center min-h-screen">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-gray-900">Welcome to School Report Management System</h1>
@@ -125,9 +149,9 @@ function App() {
           </div>
           <OnboardingForm userId={session.user.id} onSuccess={handleOnboardingSuccess} />
         </div>
-      ) : (
+      ) : hasCompletedOnboarding === true ? (
         <Dashboard userId={session.user.id} onSignOut={handleSignOut} />
-      )}
+      ) : null}
     </div>
   );
 }
