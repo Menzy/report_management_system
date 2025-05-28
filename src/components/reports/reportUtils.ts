@@ -232,7 +232,7 @@ export const calculateSubjectPositions = async (report: Report, classId: string)
       const position = studentScores.findIndex((s) => s.studentId === report.student.id);
 
       if (position !== -1) {
-        subject.position = `${position + 1} out of ${studentScores.length}`;
+        subject.position = `${position + 1}`;
 
       } else {
         subject.position = 'N/A';

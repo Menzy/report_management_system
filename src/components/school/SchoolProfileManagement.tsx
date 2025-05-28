@@ -5,9 +5,14 @@ import { ArrowLeft, Building2, MapPin, Mail, Phone, MessageSquareQuote, Upload, 
 type SchoolProfileManagementProps = {
   schoolId: string;
   onBack: () => void;
+  onUpdateSuccess?: () => Promise<void>;
 };
 
-const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({ schoolId, onBack }) => {
+const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({ 
+  schoolId, 
+  onBack, 
+  onUpdateSuccess 
+}) => {
   const [schoolName, setSchoolName] = useState('');
   const [schoolSlogan, setSchoolSlogan] = useState('');
   const [schoolAddress, setSchoolAddress] = useState('');
@@ -130,6 +135,11 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({ schoo
       // Clear the file input
       setSchoolCrest(null);
       setPreviewUrl(null);
+      
+      // Notify parent component of successful update
+      if (onUpdateSuccess) {
+        await onUpdateSuccess();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
