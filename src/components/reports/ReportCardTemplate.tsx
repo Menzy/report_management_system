@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { toOrdinal } from "../../utils/format";
 
 const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report }, ref) => {
   return (
@@ -40,15 +41,15 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
         </div>
 
         {/* Student Information */}
-        <div className="grid grid-cols-2 gap-4 mt-4 border-b-2 border-gray-300 pb-4">
+        <div className="grid grid-cols-2 gap-4 mt-4 border-b-2 border-gray-300 pb-4 text-sm">
           <div>
-            <p><span className="font-semibold">Student ID:</span> {report.student.student_id}</p>
-            <p><span className="font-sem ibold">Student Name:</span> {report.student.name}</p>
-            <p><span className="font-semibold">Class:</span> {report.class.name}</p>
+            <p><span className="font-bold">Student ID:</span> {report.student.student_id}</p>
+            <p><span className="font-bold">Student Name:</span> {report.student.name}</p>
+            <p><span className="font-bold">Class:</span> {report.class.name}</p>
           </div>
           <div>
-            <p><span className="font-semibold">Attendance:</span> {report.attendance.present}/{report.attendance.total} days</p>
-            <p><span className="font-semibold">Position:</span> {report.position}</p>
+            <p><span className="font-bold">Attendance:</span> {report.attendance.present}/{report.attendance.total} days</p>
+            <p><span className="font-bold">Position:</span> {toOrdinal(report.position)}</p>
             <p><span className="font-semibold">Academic Year:</span> {report.academicYear}</p>
           </div>
         </div>
@@ -90,48 +91,68 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
           </table>
         </div>
 
-        {/* Grading System */}
-        <div className="mt-6 grid grid-cols-2 gap-4">
-          <div>
+        {/* Grading System and Comments */}
+        <div className="mt-6 grid grid-cols-2 gap-6 items-start">
+          {/* Left Section - Grading System */}
+          <div className="flex flex-col h-full">
             <h3 className="text-md font-semibold mb-2">Grading System</h3>
-            <table className="min-w-full border border-gray-300 text-sm">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border border-gray-300 px-2 py-1">Score Range</th>
-                  <th className="border border-gray-300 px-2 py-1">Grade</th>
-                  <th className="border border-gray-300 px-2 py-1">Remark</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs">
-                <tr><td className="border border-gray-300 px-2 py-1">80-100</td><td className="border border-gray-300 px-2 py-1">1</td><td className="border border-gray-300 px-2 py-1">Excellent</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">75-79</td><td className="border border-gray-300 px-2 py-1">2</td><td className="border border-gray-300 px-2 py-1">Very Good</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">70-74</td><td className="border border-gray-300 px-2 py-1">3</td><td className="border border-gray-300 px-2 py-1">Good</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">65-69</td><td className="border border-gray-300 px-2 py-1">4</td><td className="border border-gray-300 px-2 py-1">Credit</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">60-64</td><td className="border border-gray-300 px-2 py-1">5</td><td className="border border-gray-300 px-2 py-1">Average</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">50-59</td><td className="border border-gray-300 px-2 py-1">6</td><td className="border border-gray-300 px-2 py-1">Below Average</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">45-49</td><td className="border border-gray-300 px-2 py-1">7</td><td className="border border-gray-300 px-2 py-1">Pass</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">40-44</td><td className="border border-gray-300 px-2 py-1">8</td><td className="border border-gray-300 px-2 py-1">Developing</td></tr>
-                <tr><td className="border border-gray-300 px-2 py-1">0-39</td><td className="border border-gray-300 px-2 py-1">9</td><td className="border border-gray-300 px-2 py-1">Emerging</td></tr>
-              </tbody>
-            </table>
+            <div className="border border-gray-300 rounded flex-1 flex flex-col">
+              <div className="overflow-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border border-gray-300 px-3 py-2 text-sm font-medium">Score Range</th>
+                      <th className="border border-gray-300 px-3 py-2 text-sm font-medium">Grade</th>
+                      <th className="border border-gray-300 px-3 py-2 text-sm font-medium">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-xs">
+                    {[
+                      { range: '80-100', grade: '1', remark: 'Excellent' },
+                      { range: '75-79', grade: '2', remark: 'Very Good' },
+                      { range: '70-74', grade: '3', remark: 'Good' },
+                      { range: '65-69', grade: '4', remark: 'Credit' },
+                      { range: '60-64', grade: '5', remark: 'Average' },
+                      { range: '50-59', grade: '6', remark: 'Below Average' },
+                      { range: '45-49', grade: '7', remark: 'Pass' },
+                      { range: '40-44', grade: '8', remark: 'Developing' },
+                      { range: '0-39', grade: '9', remark: 'Emerging' },
+                    ].map((row, index) => (
+                      <tr key={index}>
+                        <td className="border border-gray-300 px-3 py-1.5">{row.range}</td>
+                        <td className="border border-gray-300 px-3 py-1.5 text-center">{row.grade}</td>
+                        <td className="border border-gray-300 px-3 py-1.5">{row.remark}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
           
-          <div>
+          {/* Right Section - Comments */}
+          <div className="flex flex-col h-full">
             <h3 className="text-md font-semibold mb-2">Comments</h3>
-            <div className="border border-gray-300 p-2 h-40">
-              <p className="text-sm mb-2"><span className="font-semibold">Class Teacher's Comment:</span> </p>
-              <p className="text-sm mt-6"><span className="font-semibold">HeadTeacher's Comment:</span> </p>
+            <div className="border border-gray-300 rounded flex-1 flex flex-col">
+              <div className="flex-1 p-3 border-b border-gray-200">
+                <p className="text-sm font-medium mb-1">Class Teacher's Comment:</p>
+                <div className="h-16"></div>
+              </div>
+              <div className="flex-1 p-3">
+                <p className="text-sm font-medium mb-1">HeadTeacher's Comment:</p>
+                <div className="h-16"></div>
+              </div>
             </div>
             
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div className="text-center">
-                <div className="border-t border-gray-400 pt-1 mt-8">
-                  <p className="text-sm">Class Teacher's Signature</p>
+                <div className="border-t border-gray-400 pt-2 mt-6">
+                  <p className="text-xs text-gray-600">Class Teacher's Signature</p>
                 </div>
               </div>
               <div className="text-center">
-                <div className="border-t border-gray-400 pt-1 mt-8">
-                  <p className="text-sm">HeadTeacher's Signature</p>
+                <div className="border-t border-gray-400 pt-2 mt-6">
+                  <p className="text-xs text-gray-600">HeadTeacher's Signature</p>
                 </div>
               </div>
             </div>

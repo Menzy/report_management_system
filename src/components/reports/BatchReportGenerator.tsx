@@ -1,17 +1,64 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { CheckCircle, AlertCircle, Clock, Folder, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, Folder, ChevronDown, ChevronUp, Download, Trash2, Loader2 } from "lucide-react";
 import ClassReportList from "./ClassReportList";
 import ReportCardModal from "./ReportCardModal";
 import { generateStudentReport, calculateSubjectPositions, calculateOverallPosition } from "./reportUtils";
 import JSZip from "jszip";
+import * as React from "react";
+import * as ReactDOM from "react-dom/client";
+import ReportCardTemplate from "./ReportCardTemplate";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+
+// Report type used for PDF generation
+type Report = {
+  student: {
+    id: string;
+    name: string;
+    student_id: string;
+    [key: string]: any; // Allow additional student properties
+  };
+  term: string;
+  academicYear: string;
+  class: {
+    id: string;
+    name: string;
+    [key: string]: any; // Allow additional class properties
+  };
+  attendance: {
+    present: number;
+    total: number;
+  };
+  position: string;
+  subjects: Array<{
+    subject_id: string;
+    subject_name: string;
+    continuous_assessment: number;
+    exam_score: number;
+    total_score: number;
+    grade: string;
+    position: string;
+    remark: string;
+    raw_scores: { [key: string]: number };
+  }>;
+  school: {
+    id: string;
+    name: string;
+    address: string;
+    phone?: string;
+    email?: string;
+    crest_url?: string;
+    [key: string]: any; // Allow additional school properties
+  };
+};
 
 type ClassReport = {
   classId: string;
   className: string;
   status: 'pending' | 'generating' | 'completed' | 'error';
   progress: number;
-  reports: any[];
+  reports: Report[];
   academicYear: string;
   term: string;
   error?: string;
@@ -138,7 +185,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
   const [term, setTerm] = useState("First Term");
   const [classReports, setClassReports] = useState<ClassReport[]>([]);
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
-  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [availableAcademicYears, setAvailableAcademicYears] = useState<string[]>([]);
   const [availableTerms, setAvailableTerms] = useState<string[]>([]);
   const [dataAvailable, setDataAvailable] = useState(false);
@@ -373,7 +420,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
       updateClassReportProgress(selectedClassId, 20);
 
       // Generate reports for each student
-      const generatedReports = [];
+      const generatedReports: Report[] = [];
       let progress = 20;
       const progressIncrement = 70 / students.length;
 
@@ -384,7 +431,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
           if (!selectedClass) continue;
           
           // Call generateStudentReport with all required parameters in the correct order
-          const report = await generateStudentReport(student, subjects, selectedClass, school, academicYear, term);
+          const report: Report = await generateStudentReport(student, subjects, selectedClass, school, academicYear, term);
           
           // Calculate positions for the report
           await calculateSubjectPositions(report, selectedClassId);
@@ -417,7 +464,15 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
     );
   };
 
-  const updateClassReportCompleted = (classId: string, reports: any[]) => {
+  const updateClassReportCompleted = (classId: string, reports: Report[]) => {
+    // Sort reports by position (1, 2, 3, etc.)
+    const sortedReports = [...reports].sort((a, b) => {
+      // Convert position to number for comparison, handle any non-numeric positions
+      const posA = parseInt(a.position) || Number.MAX_SAFE_INTEGER;
+      const posB = parseInt(b.position) || Number.MAX_SAFE_INTEGER;
+      return posA - posB;
+    });
+
     setClassReports(prevReports => {
       const updatedReports = prevReports.map(report => {
         if (report.classId === classId) {
@@ -425,7 +480,7 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
             ...report,
             status: 'completed' as const,
             progress: 100,
-            reports
+            reports: sortedReports
           };
         }
         return report;
@@ -462,23 +517,120 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
     }
   };
 
-  const viewReport = (report: any) => {
+  const viewReport = (report: Report) => {
     setSelectedReport(report);
   };
+
+  const deleteReportGroup = (classId: string) => {
+    if (window.confirm('Are you sure you want to delete this report group? This action cannot be undone.')) {
+      setClassReports(prevReports => {
+        // Find the report to be deleted to get its details
+        const reportToDelete = prevReports.find(report => report.classId === classId);
+        if (!reportToDelete) return prevReports;
+
+        // Filter out the deleted report
+        const updatedReports = prevReports.filter(report => report.classId !== classId);
+        
+        // Update localStorage with the updated reports
+        if (school?.id) {
+          // First, get the existing saved reports
+          const savedReports = localStorage.getItem(`reports_${school.id}`);
+          if (savedReports) {
+            try {
+              const reportGroups: ReportGroup[] = JSON.parse(savedReports);
+              // Filter out the deleted report group
+              const updatedGroups = reportGroups.filter(group => 
+                !(group.classReport.classId === classId && 
+                  group.classReport.term === reportToDelete.term && 
+                  group.classReport.academicYear === reportToDelete.academicYear)
+              );
+              // Save back to localStorage
+              localStorage.setItem(`reports_${school.id}`, JSON.stringify(updatedGroups));
+            } catch (error) {
+              console.error('Error updating localStorage after deletion:', error);
+              // If parsing fails, just save the updated reports directly
+              saveReportsToLocalStorage(school.id, updatedReports);
+            }
+          } else {
+            saveReportsToLocalStorage(school.id, updatedReports);
+          }
+        }
+        
+        // If the deleted report was expanded, collapse it
+        if (expandedClass === classId) {
+          setExpandedClass(null);
+        }
+        
+        return updatedReports;
+      });
+    }
+  };
+
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
 
   const downloadAllReports = async (classId: string) => {
     const classReport = classReports.find(report => report.classId === classId);
     if (!classReport || classReport.status !== 'completed') return;
 
     try {
+      setIsGeneratingPdf(classId);
       const zip = new JSZip();
       
-      // Add each report to the zip file
-      classReport.reports.forEach(report => {
-        const html = generateReportHtml(report);
-        zip.file(`${report.student.name.replace(/\s+/g, '_')}_Report.html`, html);
-      });
-      
+      // Process reports one by one to avoid memory issues
+      for (const report of classReport.reports) {
+        try {
+          // Create a temporary container for the report
+          const container = document.createElement('div');
+          container.style.position = 'absolute';
+          container.style.left = '-9999px';
+          container.style.width = '210mm';
+          container.style.padding = '20mm';
+          document.body.appendChild(container);
+
+          // Create a root and render the ReportCardTemplate
+          const root = ReactDOM.createRoot(container);
+          root.render(
+            React.createElement('div', { className: 'report-print' },
+              React.createElement(ReportCardTemplate, { report })
+            )
+          );
+
+          // Wait for the component to render
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Convert the component to a canvas
+          const canvas = await html2canvas(container, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            logging: false,
+            allowTaint: true,
+          } as any); // Type assertion to bypass TypeScript error
+
+          // Create a new PDF
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+          });
+
+          // Add the image to the PDF
+          const imgData = canvas.toDataURL('image/png');
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+
+          // Add PDF to zip
+          const pdfBlob = pdf.output('blob');
+          zip.file(`${report.student.name.replace(/\s+/g, '_')}_Report.pdf`, pdfBlob);
+          
+          // Clean up
+          root.unmount();
+          document.body.removeChild(container);
+        } catch (error) {
+          console.error(`Error generating PDF for ${report.student.name}:`, error);
+        }
+      }
+
       // Generate the zip file
       const content = await zip.generateAsync({ type: 'blob' });
       
@@ -490,166 +642,15 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
       link.click();
       document.body.removeChild(link);
     } catch (error) {
-      console.error('Error downloading reports:', error);
-      alert('Error downloading reports. Please try again.');
+      console.error('Error generating reports:', error);
+      alert('Error generating reports. Please try again.');
+    } finally {
+      setIsGeneratingPdf(null);
     }
   };
 
-  const generateReportHtml = (report: any) => {
-    // Generate HTML content for the report
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Report Card - ${report.student.name}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-          .report-card { max-width: 800px; margin: 0 auto; }
-          .header { text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-          .school-info { text-align: center; }
-          .school-name { font-size: 24px; font-weight: bold; color: #8B0000; }
-          .school-address, .school-contact { font-size: 14px; color: #666; }
-          .report-title { margin-top: 15px; }
-          .report-title h2 { font-size: 20px; color: #0066cc; margin: 0; }
-          .report-title p { font-size: 14px; color: #0066cc; margin: 5px 0 0; }
-          .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; border-bottom: 2px solid #ccc; padding-bottom: 15px; }
-          .student-info p { margin: 5px 0; }
-          .student-info .label { font-weight: bold; }
-          .academic-performance { margin-top: 15px; }
-          .academic-performance h3 { font-size: 18px; margin-bottom: 10px; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #ccc; padding: 8px; }
-          th { background-color: #f5f5f5; text-align: left; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .footer { margin-top: 20px; text-align: center; border-top: 1px solid #ccc; padding-top: 10px; font-size: 14px; color: #666; }
-          .grading-system { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          .comments { border: 1px solid #ccc; padding: 10px; height: 150px; }
-          .signatures { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          .signature { text-align: center; }
-          .signature-line { border-top: 1px solid #444; padding-top: 5px; margin-top: 40px; }
-        </style>
-      </head>
-      <body>
-        <div class="report-card">
-          <div class="header">
-            <div class="logo">${report.school.crest_url ? `<img src="${report.school.crest_url}" alt="School Crest" height="80">` : ''}</div>
-            <div class="school-info">
-              <div class="school-name">${report.school.name}</div>
-              <div class="school-address">${report.school.address}</div>
-              <div class="school-contact">
-                Tel: ${report.school.phone || 'N/A'}<br>
-                Email: ${report.school.email || 'N/A'}
-              </div>
-            </div>
-            <div class="logo">${report.school.crest_url ? `<img src="${report.school.crest_url}" alt="School Crest" height="80">` : ''}</div>
-          </div>
-          
-          <div class="report-title">
-            <h2>STUDENT'S REPORT CARD</h2>
-            <p>${report.term} - ${report.academicYear}</p>
-          </div>
-          
-          <div class="student-info">
-            <div>
-              <p><span class="label">Student ID:</span> ${report.student.student_id}</p>
-              <p><span class="label">Student Name:</span> ${report.student.name}</p>
-              <p><span class="label">Class:</span> ${report.class.name}</p>
-            </div>
-            <div>
-              <p><span class="label">Attendance:</span> ${report.attendance.present}/${report.attendance.total} days</p>
-              <p><span class="label">Position:</span> ${report.position}</p>
-              <p><span class="label">Academic Year:</span> ${report.academicYear}</p>
-            </div>
-          </div>
-          
-          <div class="academic-performance">
-            <h3>Academic Performance</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Subject</th>
-                  <th>CA (50%)</th>
-                  <th>Exam (50%)</th>
-                  <th>Total (100%)</th>
-                  <th>Grade</th>
-                  <th>Position</th>
-                  <th>Remark</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${report.subjects.map((subject, index) => `
-                  <tr>
-                    <td>${subject.subject_name}</td>
-                    <td align="center">${subject.continuous_assessment * 0.5}</td>
-                    <td align="center">${subject.exam_score * 0.5}</td>
-                    <td align="center"><strong>${subject.total_score}</strong></td>
-                    <td align="center">${subject.grade}</td>
-                    <td align="center">${subject.position}</td>
-                    <td>${subject.remark}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="grading-system">
-            <div>
-              <h3>Grading System</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Score Range</th>
-                    <th>Grade</th>
-                    <th>Remark</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td>80-100</td><td>1</td><td>Excellent</td></tr>
-                  <tr><td>75-79</td><td>2</td><td>Very Good</td></tr>
-                  <tr><td>70-74</td><td>3</td><td>Good</td></tr>
-                  <tr><td>65-69</td><td>4</td><td>Credit</td></tr>
-                  <tr><td>60-64</td><td>5</td><td>Average</td></tr>
-                  <tr><td>50-59</td><td>6</td><td>Below Average</td></tr>
-                  <tr><td>45-49</td><td>7</td><td>Pass</td></tr>
-                  <tr><td>40-44</td><td>8</td><td>Developing</td></tr>
-                  <tr><td>0-39</td><td>9</td><td>Emerging</td></tr>
-                </tbody>
-              </table>
-            </div>
-            
-            <div>
-              <h3>Comments</h3>
-              <div class="comments">
-                <p><strong>Class Teacher's Comment:</strong> </p>
-                <p style="margin-top: 30px;"><strong>HeadTeacher's Comment:</strong> </p>
-              </div>
-              
-              <div class="signatures">
-                <div class="signature">
-                  <div class="signature-line">Class Teacher's Signature</div>
-                </div>
-                <div class="signature">
-                  <div class="signature-line">HeadTeacher's Signature</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <p>Report generated on ${new Date().toLocaleDateString()}</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-  };
-
   return (
-    <div className="mb-6 p-6 border border-gray-200 rounded-lg bg-gray-50">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Batch Report Cards</h3>
-      
+    <div className="p-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label htmlFor="batchClass" className="block text-sm font-medium text-gray-700 mb-1">
@@ -776,16 +777,43 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
                   </div>
                   <div className="flex items-center">
                     {classReport.status === 'completed' && (
-                      <button
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          downloadAllReports(classReport.classId);
-                        }}
-                        className="mr-2 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-                      >
-                        <Download className="w-3 h-3 mr-1" />
-                        Download All
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            downloadAllReports(classReport.classId);
+                          }}
+                          disabled={isGeneratingPdf === classReport.classId}
+                          className={`px-3 py-1 text-xs text-white rounded flex items-center ${
+                            isGeneratingPdf === classReport.classId 
+                              ? 'bg-green-400 cursor-not-allowed' 
+                              : 'bg-green-600 hover:bg-green-700'
+                          }`}
+                          title="Download all reports as PDF"
+                        >
+                          {isGeneratingPdf === classReport.classId ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              Preparing...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3 h-3 mr-1" />
+                              Download All
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            deleteReportGroup(classReport.classId);
+                          }}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                          title="Delete report group"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     )}
                     {expandedClass === classReport.classId ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />

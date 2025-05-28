@@ -1,7 +1,12 @@
-import React from "react";
-import { Printer } from "lucide-react";
+import { Printer, Download } from "lucide-react";
+import { Report } from '../../utils/generatePdf';
 
-const ClassReportList = ({ reports, onViewReport }) => {
+interface ClassReportListProps {
+  reports: Report[];
+  onViewReport: (report: Report) => void;
+}
+
+const ClassReportList = ({ reports, onViewReport }: ClassReportListProps) => {
   return (
     <div className="p-4 border-t border-gray-200">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -15,15 +20,33 @@ const ClassReportList = ({ reports, onViewReport }) => {
             <p className="text-xs text-gray-500 mb-2">ID: {report.student.student_id}</p>
             <div className="flex justify-between items-center text-xs">
               <span className="text-blue-600">Position: {report.position}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onViewReport(report);
-                }}
-                className="p-1 text-gray-500 hover:text-blue-600"
-              >
-                <Printer className="w-4 h-4" />
-              </button>
+              <div className="flex space-x-1">
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const { downloadPdf } = await import('../../utils/generatePdf');
+                      await downloadPdf(report);
+                    } catch (error) {
+                      console.error('Error downloading PDF:', error);
+                    }
+                  }}
+                  className="p-1 text-gray-500 hover:text-green-600"
+                  title="Download as PDF"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewReport(report);
+                  }}
+                  className="p-1 text-gray-500 hover:text-blue-600"
+                  title="View report"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         ))}

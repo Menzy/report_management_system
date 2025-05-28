@@ -17,27 +17,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'academic-records' | 'report-cards' | 'school-profile'>('overview');
 
-  useEffect(() => {
-    const fetchSchoolData = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('schools')
-          .select('*')
-          .eq('user_id', userId)
-          .single();
+  const fetchSchoolData = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-        if (error) throw error;
-        setSchool(data as School);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load school data');
-        console.error('Error fetching school data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSchoolData();
+      if (error) throw error;
+      setSchool(data as School);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load school data');
+      console.error('Error fetching school data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
+
+  useEffect(() => {
+    fetchSchoolData();
+  }, [fetchSchoolData]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -235,7 +236,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
               ) : activeTab === 'report-cards' ? (
                 <ReportCardGenerator schoolId={school?.id || ''} onBack={() => setActiveTab('overview')} />
               ) : (
-                <SchoolProfileManagement schoolId={school?.id || ''} onBack={() => setActiveTab('overview')} />
+                <SchoolProfileManagement 
+                  schoolId={school?.id || ''} 
+                  onBack={() => setActiveTab('overview')}
+                  onUpdateSuccess={fetchSchoolData}
+                />
               )}
             </div>
           </div>
