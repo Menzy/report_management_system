@@ -78,6 +78,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
               id="email"
               name="email"
               type="email"
+              autoComplete="username"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -99,6 +100,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
               id="password"
               name="password"
               type="password"
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}

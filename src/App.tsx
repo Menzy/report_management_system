@@ -13,6 +13,7 @@ function App() {
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [isLoginMode, setIsLoginMode] = useState(true);
 
 
   useEffect(() => {
@@ -31,23 +32,45 @@ function App() {
       setInitialized(true);
     });
 
-    // Listen for auth changes but only for real auth events, not tab focus
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Only process meaningful auth events
-        if (['SIGNED_IN', 'SIGNED_OUT', 'USER_UPDATED', 'TOKEN_REFRESHED'].includes(event)) {
-          console.log('Auth event:', event);
-          setSession(session);
-          if (session) {
-            setOnboardingLoading(true);
-            checkOnboardingStatus(session.user.id);
-            setShowLanding(false);
-          } else {
-            setHasCompletedOnboarding(null);
+      async (event, session) => {
+        console.log('Auth state changed:', event, session);
+        
+        // Always update the session
+        setSession(session);
+        
+        if (session) {
+          // If we have a session, check onboarding status
+          setOnboardingLoading(true);
+          try {
+            await checkOnboardingStatus(session.user.id);
+          } finally {
+            setOnboardingLoading(false);
           }
+          setShowLanding(false);
+        } else {
+          // If no session, reset states
+          setHasCompletedOnboarding(null);
+          setShowLanding(true);
         }
       }
     );
+    
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session);
+      setSession(session);
+      if (session) {
+        setOnboardingLoading(true);
+        checkOnboardingStatus(session.user.id).finally(() => {
+          setOnboardingLoading(false);
+        });
+        setShowLanding(false);
+      }
+      setLoading(false);
+      setInitialized(true);
+    });
 
     // Handle visibility change to prevent unnecessary refreshes
     const handleVisibilityChange = () => {
@@ -85,9 +108,26 @@ function App() {
     }
   };
 
-  const handleAuthSuccess = () => {
-    // The session will be updated by the auth state change listener
-    setShowLanding(false);
+  const handleAuthSuccess = async () => {
+    try {
+      // Force a session refresh to ensure we have the latest data
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Auth success, session:', session);
+      
+      if (session) {
+        setSession(session);
+        setOnboardingLoading(true);
+        await checkOnboardingStatus(session.user.id);
+        setShowLanding(false);
+      }
+    } catch (error) {
+      console.error('Error in handleAuthSuccess:', error);
+      // If there's an error, reset to login state
+      setSession(null);
+      setShowLanding(true);
+    } finally {
+      setOnboardingLoading(false);
+    }
   };
 
   const handleOnboardingSuccess = () => {
