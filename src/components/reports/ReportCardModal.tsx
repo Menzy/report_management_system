@@ -1,9 +1,15 @@
 import React, { useRef, useEffect } from "react";
 import { Printer, Download } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
-import ReportCardTemplate from "./ReportCardTemplate";
+import ReportCardWithFullAnalysis from "./ReportCardWithFullAnalysis";
 
-const ReportCardModal = ({ report, onClose }) => {
+interface ReportCardModalProps {
+  report: any;
+  onClose: () => void;
+  classId: string;
+}
+
+const ReportCardModal: React.FC<ReportCardModalProps> = ({ report, onClose, classId }) => {
   const reportRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -23,7 +29,7 @@ const ReportCardModal = ({ report, onClose }) => {
   const handleDownloadPdf = async () => {
     try {
       const { downloadPdf } = await import('../../utils/generatePdf');
-      await downloadPdf(report);
+      await downloadPdf(report, classId);
     } catch (error) {
       console.error('Error downloading PDF:', error);
     }
@@ -38,8 +44,27 @@ const ReportCardModal = ({ report, onClose }) => {
         margin: 10mm;
       }
       @media print {
+        .page-break-before {
+          page-break-before: always;
+        }
         .page-break {
-          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        .print-preview {
+          background: white !important;
+          padding: 0 !important;
+        }
+        .print-preview .page-break {
+          box-shadow: none !important;
+          margin: 0 !important;
+          border: none !important;
+          border-radius: 0 !important;
+          width: auto !important;
+          max-width: none !important;
+          min-height: auto !important;
+        }
+        .print-preview .page-break::before {
+          display: none !important;
         }
       }
     `
@@ -47,10 +72,10 @@ const ReportCardModal = ({ report, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={(e) => e.stopPropagation()}>
-      <div ref={modalRef} className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div ref={modalRef} className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-medium text-gray-900">
-            Report Card: {report.student.name}
+            Report Card with Performance Analysis: {report.student.name}
           </h3>
           <div className="flex space-x-2">
             <button
@@ -76,7 +101,9 @@ const ReportCardModal = ({ report, onClose }) => {
           </div>
         </div>
         <div className="p-6">
-          <ReportCardTemplate ref={reportRef} report={report} />
+          <div className="print-preview">
+            <ReportCardWithFullAnalysis ref={reportRef} report={report} classId={classId} />
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,104 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Page break styles for PDF generation */
+@media print {
+  .page-break {
+    page-break-inside: avoid;
+  }
+  
+  .page-break-before {
+    page-break-before: always;
+  }
+  
+  .page-break-after {
+    page-break-after: always;
+  }
+}
+
+/* Report card specific styles */
+.report-card {
+  background: white;
+  color: black;
+}
+
+/* Print preview styles for web view */
+.print-preview {
+  background: #f5f5f5;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.print-preview .page-break {
+  background: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin: 0 auto 20px auto;
+  padding: 20mm;
+  width: 210mm;
+  min-height: 297mm; /* A4 height */
+  max-width: 210mm;
+  position: relative;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+/* Ensure content fits within page boundaries */
+.print-preview .page-break > * {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Page number indicator for preview */
+.print-preview .page-break::before {
+  content: "Page " counter(page);
+  counter-increment: page;
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 10px;
+  color: #666;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+}
+
+.print-preview {
+  counter-reset: page;
+}
+
+/* Hide page indicators when printing */
+@media print {
+  .print-preview {
+    background: white;
+    padding: 0;
+  }
+  
+  .print-preview .page-break {
+    box-shadow: none;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    width: auto;
+    max-width: none;
+    min-height: auto;
+  }
+  
+  .print-preview .page-break::before {
+    display: none;
+  }
+}
+
+/* Chart container styles */
+.recharts-wrapper {
+  font-family: inherit;
+}
+
+.recharts-cartesian-axis-tick-value {
+  font-size: 10px;
+}
+
+.recharts-legend-wrapper {
+  font-size: 12px;
+}

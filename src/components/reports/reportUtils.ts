@@ -393,3 +393,240 @@ export const getGradeAndRemark = (score: number): { grade: string; remark: strin
     return { grade: '9', remark: 'Emerging' };
   }
 };
+
+export const getPerformanceComparisonData = async (
+  report: Report,
+  classId: string
+): Promise<{
+  comparisonData: Array<{
+    subject: string;
+    student: number;
+    highest: number;
+    lowest: number;
+    average: number;
+  }>;
+  overallStats: {
+    studentAverage: number;
+    classAverage: number;
+    highestInClass: number;
+    lowestInClass: number;
+  };
+}> => {
+  try {
+    // Get all students in this class
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('id, name')
+      .eq('class_id', classId);
+
+    if (studentsError) throw studentsError;
+    if (!students || students.length === 0) {
+      return {
+        comparisonData: [],
+        overallStats: {
+          studentAverage: 0,
+          classAverage: 0,
+          highestInClass: 0,
+          lowestInClass: 0,
+        },
+      };
+    }
+
+    const studentIds = students.map((s) => s.id);
+    const subjectIds = report.subjects.map((s) => s.subject_id);
+
+    // Batch fetch all scores for all subjects and all students
+    let scoresQuery = supabase
+      .from('scores')
+      .select('student_id, subject_id, assessment_type, score')
+      .in('subject_id', subjectIds)
+      .in('student_id', studentIds);
+
+    if (report.term) {
+      scoresQuery = scoresQuery.eq('term', report.term);
+    }
+
+    if (report.academicYear) {
+      scoresQuery = scoresQuery.eq('academic_year', report.academicYear);
+    }
+
+    const { data: allScores, error: scoresError } = await scoresQuery;
+
+    if (scoresError) throw scoresError;
+    if (!allScores || allScores.length === 0) {
+      return {
+        comparisonData: [],
+        overallStats: {
+          studentAverage: 0,
+          classAverage: 0,
+          highestInClass: 0,
+          lowestInClass: 0,
+        },
+      };
+    }
+
+    const comparisonData: Array<{
+      subject: string;
+      student: number;
+      highest: number;
+      lowest: number;
+      average: number;
+    }> = [];
+
+    let studentTotalScore = 0;
+    let classTotalScore = 0;
+    let subjectCount = 0;
+
+    // Process each subject
+    for (const subject of report.subjects) {
+      const subjectScores = allScores.filter((score) => score.subject_id === subject.subject_id);
+      
+      if (subjectScores.length === 0) continue;
+
+      // Group scores by student for this subject
+      const scoresByStudent: Record<string, number> = {};
+
+      // Calculate total score for each student in this subject
+      const studentScoreMap: Record<string, { examScores: any[]; classAssessmentScores: any[] }> = {};
+
+      for (const score of subjectScores) {
+        const studentId = score.student_id;
+        if (!studentScoreMap[studentId]) {
+          studentScoreMap[studentId] = {
+            examScores: [],
+            classAssessmentScores: [],
+          };
+        }
+
+        if (score.assessment_type.toUpperCase().includes('EXAM')) {
+          studentScoreMap[studentId].examScores.push(score);
+        } else {
+          studentScoreMap[studentId].classAssessmentScores.push(score);
+        }
+      }
+
+      // Calculate final scores for each student
+      const finalScores: number[] = [];
+      let currentStudentScore = 0;
+
+      for (const [studentId, scores] of Object.entries(studentScoreMap)) {
+        // Calculate CA score (50%)
+        let caScore = 0;
+        if (scores.classAssessmentScores.length > 0) {
+          const totalClassScore = scores.classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
+          caScore = totalClassScore * 0.5;
+        }
+
+        // Calculate exam score (50%)
+        let examScore = 0;
+        if (scores.examScores.length > 0) {
+          examScore = scores.examScores[0].score * 0.5;
+        }
+
+        const totalScore = caScore + examScore;
+        finalScores.push(totalScore);
+
+        // Track current student's score
+        if (studentId === report.student.id) {
+          currentStudentScore = totalScore;
+        }
+      }
+
+      if (finalScores.length > 0) {
+        const highest = Math.max(...finalScores);
+        const lowest = Math.min(...finalScores);
+        const average = finalScores.reduce((sum, score) => sum + score, 0) / finalScores.length;
+
+        comparisonData.push({
+          subject: subject.subject_name,
+          student: Math.round(currentStudentScore),
+          highest: Math.round(highest),
+          lowest: Math.round(lowest),
+          average: Math.round(average),
+        });
+
+        studentTotalScore += currentStudentScore;
+        classTotalScore += average;
+        subjectCount++;
+      }
+    }
+
+    // Calculate overall statistics
+    const studentAverage = subjectCount > 0 ? studentTotalScore / subjectCount : 0;
+    const classAverage = subjectCount > 0 ? classTotalScore / subjectCount : 0;
+
+    // Get highest and lowest performing students overall
+    const allStudentAverages: number[] = [];
+    
+    for (const student of students) {
+      const studentScores = allScores.filter((score) => score.student_id === student.id);
+      
+      if (studentScores.length === 0) continue;
+
+      const scoresBySubject: Record<string, { examScores: any[]; classAssessmentScores: any[] }> = {};
+
+      for (const score of studentScores) {
+        const subjectId = score.subject_id;
+        if (!scoresBySubject[subjectId]) {
+          scoresBySubject[subjectId] = {
+            examScores: [],
+            classAssessmentScores: [],
+          };
+        }
+
+        if (score.assessment_type.toUpperCase().includes('EXAM')) {
+          scoresBySubject[subjectId].examScores.push(score);
+        } else {
+          scoresBySubject[subjectId].classAssessmentScores.push(score);
+        }
+      }
+
+      let totalScoreSum = 0;
+      let subjectCountForStudent = 0;
+
+      for (const [subjectId, subjectScores] of Object.entries(scoresBySubject)) {
+        let caScore = 0;
+        if (subjectScores.classAssessmentScores.length > 0) {
+          const totalClassScore = subjectScores.classAssessmentScores.reduce((acc, score) => acc + score.score, 0);
+          caScore = totalClassScore * 0.5;
+        }
+
+        let examScore = 0;
+        if (subjectScores.examScores.length > 0) {
+          examScore = subjectScores.examScores[0].score * 0.5;
+        }
+
+        totalScoreSum += caScore + examScore;
+        subjectCountForStudent++;
+      }
+
+      if (subjectCountForStudent > 0) {
+        allStudentAverages.push(totalScoreSum / subjectCountForStudent);
+      }
+    }
+
+    const highestInClass = allStudentAverages.length > 0 ? Math.max(...allStudentAverages) : 0;
+    const lowestInClass = allStudentAverages.length > 0 ? Math.min(...allStudentAverages) : 0;
+
+    return {
+      comparisonData,
+      overallStats: {
+        studentAverage: Math.round(studentAverage),
+        classAverage: Math.round(classAverage),
+        highestInClass: Math.round(highestInClass),
+        lowestInClass: Math.round(lowestInClass),
+      },
+    };
+  } catch (error) {
+    console.error('Error getting performance comparison data:', error);
+    return {
+      comparisonData: [],
+      overallStats: {
+        studentAverage: 0,
+        classAverage: 0,
+        highestInClass: 0,
+        lowestInClass: 0,
+      },
+    };
+  }
+};

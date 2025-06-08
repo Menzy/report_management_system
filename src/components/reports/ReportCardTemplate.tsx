@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { toOrdinal } from "../../utils/format";
+import { GRADING_SCALE } from "../../utils/gradingSystem";
 
 const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report }, ref) => {
   return (
@@ -107,17 +108,7 @@ const ReportCardTemplate = forwardRef<HTMLDivElement, { report: any }>(({ report
                     </tr>
                   </thead>
                   <tbody className="text-xs">
-                    {[
-                      { range: '80-100', grade: '1', remark: 'Excellent' },
-                      { range: '75-79', grade: '2', remark: 'Very Good' },
-                      { range: '70-74', grade: '3', remark: 'Good' },
-                      { range: '65-69', grade: '4', remark: 'Credit' },
-                      { range: '60-64', grade: '5', remark: 'Average' },
-                      { range: '50-59', grade: '6', remark: 'Below Average' },
-                      { range: '45-49', grade: '7', remark: 'Pass' },
-                      { range: '40-44', grade: '8', remark: 'Developing' },
-                      { range: '0-39', grade: '9', remark: 'Emerging' },
-                    ].map((row, index) => (
+                    {GRADING_SCALE.map((row, index) => (
                       <tr key={index}>
                         <td className="border border-gray-300 px-3 py-1.5">{row.range}</td>
                         <td className="border border-gray-300 px-3 py-1.5 text-center">{row.grade}</td>

@@ -4,9 +4,10 @@ import { Report } from '../../utils/generatePdf';
 interface ClassReportListProps {
   reports: Report[];
   onViewReport: (report: Report) => void;
+  classId: string;
 }
 
-const ClassReportList = ({ reports, onViewReport }: ClassReportListProps) => {
+const ClassReportList = ({ reports, onViewReport, classId }: ClassReportListProps) => {
   return (
     <div className="p-4 border-t border-gray-200">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -26,7 +27,7 @@ const ClassReportList = ({ reports, onViewReport }: ClassReportListProps) => {
                     e.stopPropagation();
                     try {
                       const { downloadPdf } = await import('../../utils/generatePdf');
-                      await downloadPdf(report);
+                      await downloadPdf(report, classId);
                     } catch (error) {
                       console.error('Error downloading PDF:', error);
                     }

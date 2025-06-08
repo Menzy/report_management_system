@@ -7,7 +7,7 @@ import { generateStudentReport, calculateSubjectPositions, calculateOverallPosit
 import JSZip from "jszip";
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
-import ReportCardTemplate from "./ReportCardTemplate";
+import ReportCardWithFullAnalysis from "./ReportCardWithFullAnalysis";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
@@ -587,24 +587,23 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
           container.style.padding = '20mm';
           document.body.appendChild(container);
 
-          // Create a root and render the ReportCardTemplate
+          // Create a root and render the ReportCardWithFullAnalysis
           const root = ReactDOM.createRoot(container);
           root.render(
             React.createElement('div', { className: 'report-print' },
-              React.createElement(ReportCardTemplate, { report })
+              React.createElement(ReportCardWithFullAnalysis, { report, classId })
             )
           );
 
-          // Wait for the component to render
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Wait for the component to render and charts to load
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // Convert the component to a canvas
-          const canvas = await html2canvas(container, {
-            scale: 2, // Higher scale for better quality
-            useCORS: true,
-            logging: false,
-            allowTaint: true,
-          } as any); // Type assertion to bypass TypeScript error
+          // Get all page elements
+          const pageElements = container.querySelectorAll('.page-break');
+          
+          if (pageElements.length === 0) {
+            throw new Error('No pages found to generate PDF');
+          }
 
           // Create a new PDF
           const pdf = new jsPDF({
@@ -613,11 +612,34 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
             format: 'a4',
           });
 
-          // Add the image to the PDF
-          const imgData = canvas.toDataURL('image/png');
           const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+          
+          // Process each page
+          for (let i = 0; i < pageElements.length; i++) {
+            const pageElement = pageElements[i] as HTMLElement;
+            
+            // Convert the page to a canvas
+            const canvas = await html2canvas(pageElement, {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              allowTaint: true,
+              scrollX: 0,
+              scrollY: 0,
+              backgroundColor: '#ffffff',
+            } as any);
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+            // Add a new page if not the first page
+            if (i > 0) {
+              pdf.addPage();
+            }
+
+            // Add the image to the PDF
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+          }
 
           // Add PDF to zip
           const pdfBlob = pdf.output('blob');
@@ -846,7 +868,8 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
                 {expandedClass === classReport.classId && classReport.status === 'completed' && (
                   <ClassReportList 
                     reports={classReport.reports} 
-                    onViewReport={viewReport} 
+                    onViewReport={viewReport}
+                    classId={classReport.classId}
                   />
                 )}
               </div>
@@ -858,7 +881,8 @@ const BatchReportGenerator = ({ school, classes }: Props) => {
       {selectedReport && (
         <ReportCardModal 
           report={selectedReport} 
-          onClose={() => setSelectedReport(null)} 
+          onClose={() => setSelectedReport(null)}
+          classId={expandedClass || ''}
         />
       )}
     </div>
