@@ -18,19 +18,19 @@ const StepCard = ({ number, icon: Icon, title, description, delay }) => {
       className="relative flex flex-col md:flex-row items-start gap-6"
     >
       <div className="flex-shrink-0">
-        <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-xl font-bold">
+        <div className="w-12 h-12 rounded-full glass-bg-accent text-white flex items-center justify-center text-xl font-bold">
           {number}
         </div>
         {number < 4 && (
-          <div className="absolute left-6 top-12 w-0.5 h-16 bg-blue-200 hidden md:block"></div>
+          <div className="absolute left-6 top-12 w-0.5 h-16 bg-white/30 hidden md:block"></div>
         )}
       </div>
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex-1">
-        <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-          <Icon className="w-6 h-6 text-blue-600" />
+      <div className="glass-card flex-1">
+        <div className="glass-bg-accent w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+          <Icon className="w-6 h-6 text-white" />
         </div>
-        <h3 className="text-xl font-semibold mb-3 text-gray-900">{title}</h3>
-        <p className="text-gray-600">{description}</p>
+        <h3 className="text-xl font-semibold mb-3 text-text-glass-primary">{title}</h3>
+        <p className="text-text-glass-secondary">{description}</p>
       </div>
     </motion.div>
   );
@@ -74,8 +74,14 @@ const HowItWorksSection = () => {
   ];
 
   return (
-    <section id="how-it-works" className="py-20">
-      <div className="container mx-auto px-4">
+    <section id="how-it-works" className="py-20 relative">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+        <div className="absolute top-1/4 -left-32 w-72 h-72 glass-bg-purple rounded-full opacity-20 blur-3xl"></div>
+        <div className="absolute bottom-1/4 -right-32 w-80 h-80 glass-bg-blue rounded-full opacity-15 blur-3xl"></div>
+      </div>
+      
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 20 }}
@@ -83,13 +89,13 @@ const HowItWorksSection = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium text-sm mb-4">
+          <span className="glass-bg-purple px-4 py-2 rounded-full text-white font-medium text-sm mb-4 inline-block">
             Simple Process
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-text-glass-primary mb-4">
             How It Works
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-text-glass-secondary max-w-3xl mx-auto">
             Our streamlined workflow makes report card generation quick and easy, saving you hours of administrative work.
           </p>
         </motion.div>
@@ -111,13 +117,13 @@ const HowItWorksSection = () => {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={inView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.5, delay: 0.9 }}
-          className="mt-16 bg-blue-50 rounded-xl p-8 text-center"
+          className="mt-16 glass-card text-center"
         >
-          <h3 className="text-2xl font-semibold mb-4 text-gray-900">Ready to streamline your reporting process?</h3>
-          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+          <h3 className="text-2xl font-semibold mb-4 text-text-glass-primary">Ready to streamline your reporting process?</h3>
+          <p className="text-text-glass-secondary mb-6 max-w-2xl mx-auto">
             Join thousands of schools already saving time and improving their reporting workflow.
           </p>
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+          <button className="glass-button glass-button-primary">
             Get Started Today
           </button>
         </motion.div>

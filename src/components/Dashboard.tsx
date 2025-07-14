@@ -5,17 +5,38 @@ import MapPin from './MapPin';
 import ClassManagement from './academic/ClassManagement';
 import ReportCardGenerator from './reports/ReportCardGenerator';
 import SchoolProfileManagement from './school/SchoolProfileManagement';
+import BulkSubjectUpload from './academic/BulkSubjectUpload';
+import ReportCardModal from './reports/ReportCardModal';
 
 type DashboardProps = {
   userId: string;
   onSignOut: () => void;
 };
 
+// Add bulk upload context type
+type BulkUploadContext = {
+  schoolId: string;
+  classItem: any;
+} | null;
+
+// Add report preview context type
+type ReportPreviewContext = {
+  report: any;
+  classId: string;
+} | null;
+
 const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'academic-records' | 'report-cards' | 'school-profile'>('overview');
+  
+  // Add bulk upload state
+  const [bulkUploadContext, setBulkUploadContext] = useState<BulkUploadContext>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Add report preview state
+  const [reportPreviewContext, setReportPreviewContext] = useState<ReportPreviewContext>(null);
 
   const fetchSchoolData = React.useCallback(async () => {
     try {
@@ -45,12 +66,35 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
     onSignOut();
   };
 
+  // Add bulk upload handlers
+  const handleOpenBulkUpload = (schoolId: string, classItem: any) => {
+    setBulkUploadContext({ schoolId, classItem });
+  };
+
+  const handleCloseBulkUpload = () => {
+    setBulkUploadContext(null);
+  };
+
+  const handleBulkUploadSuccess = () => {
+    setBulkUploadContext(null);
+    setRefreshKey(prev => prev + 1); // Force refresh of ClassManagement
+  };
+
+  // Add report preview handlers
+  const handleOpenReportPreview = (report: any, classId: string) => {
+    setReportPreviewContext({ report, classId });
+  };
+
+  const handleCloseReportPreview = () => {
+    setReportPreviewContext(null);
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-2 text-gray-600">Loading dashboard...</p>
+      <div className="page-bg-primary flex items-center justify-center min-h-screen">
+        <div className="glass-card p-8 text-center glass-fade-in">
+          <div className="inline-block w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-2 text-text-glass-secondary">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -58,14 +102,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 max-w-md bg-white rounded-lg shadow-md">
-          <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md">
-            {error}
+      <div className="page-bg-primary flex items-center justify-center min-h-screen">
+        <div className="glass-card p-8 max-w-md glass-fade-in">
+          <div className="glass-alert glass-alert-error mb-4">
+            <p className="text-text-glass-primary text-sm">{error}</p>
           </div>
           <button
             onClick={handleSignOut}
-            className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            className="glass-button glass-button-primary w-full"
           >
             Sign Out
           </button>
@@ -75,14 +119,33 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
+    <div className="page-bg-primary min-h-screen">
+      {/* Bulk Upload Top-Level Overlay */}
+      {bulkUploadContext && (
+        <BulkSubjectUpload
+          schoolId={bulkUploadContext.schoolId}
+          classItem={bulkUploadContext.classItem}
+          onBack={handleCloseBulkUpload}
+          onSuccess={handleBulkUploadSuccess}
+        />
+      )}
+
+      {/* Report Preview Top-Level Overlay */}
+      {reportPreviewContext && (
+        <ReportCardModal
+          report={reportPreviewContext.report}
+          classId={reportPreviewContext.classId}
+          onClose={handleCloseReportPreview}
+        />
+      )}
+
+      <header className="glass-navbar">
         <div className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">School Report Management System</h1>
+            <h1 className="text-3xl font-bold text-text-glass-primary">School Report Management System</h1>
             <button
               onClick={handleSignOut}
-              className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              className="glass-button glass-button-danger flex items-center"
             >
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
@@ -94,25 +157,25 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
       <main className="py-10">
         <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
           {school && (
-            <div className="overflow-hidden bg-white rounded-lg shadow">
+            <div className="glass-card glass-fade-in overflow-hidden">
               <div className="px-4 py-5 sm:p-6">
                 <div className="flex items-center space-x-6">
                   {school.crest_url ? (
                     <img
                       src={school.crest_url}
                       alt={`${school.name} crest`}
-                      className="w-24 h-24 object-contain"
+                      className="w-24 h-24 object-contain rounded-lg"
                     />
                   ) : (
-                    <div className="flex items-center justify-center w-24 h-24 bg-gray-100 rounded-md">
-                      <Building2 className="w-12 h-12 text-gray-400" />
+                    <div className="flex items-center justify-center w-24 h-24 glass-bg-subtle rounded-lg">
+                      <Building2 className="w-12 h-12 text-text-glass-secondary" />
                     </div>
                   )}
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{school.name}</h2>
-                    <p className="mt-1 text-sm italic text-gray-600">"{school.slogan}"</p>
-                    <div className="flex items-start mt-2 text-sm text-gray-500">
-                      <MapPin className="flex-shrink-0 w-5 h-5 mr-1 text-gray-400" />
+                    <h2 className="text-2xl font-bold text-text-glass-primary">{school.name}</h2>
+                    <p className="mt-1 text-sm italic text-text-glass-secondary">"{school.slogan}"</p>
+                    <div className="flex items-start mt-2 text-sm text-text-glass-muted">
+                      <MapPin className="flex-shrink-0 w-5 h-5 mr-1 text-text-glass-secondary" />
                       <span>{school.address}</span>
                     </div>
                   </div>
@@ -122,15 +185,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
           )}
 
           <div className="mt-8">
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="glass-card p-1 glass-slide-up">
+              <nav className="flex space-x-2">
                 <button
                   onClick={() => setActiveTab('overview')}
                   className={`${
                     activeTab === 'overview'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                      ? 'glass-nav-item active'
+                      : 'glass-nav-item'
+                  } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
                 >
                   <Building2 className="w-5 h-5 mr-2" />
                   Overview
@@ -139,9 +202,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                   onClick={() => setActiveTab('academic-records')}
                   className={`${
                     activeTab === 'academic-records'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                      ? 'glass-nav-item active'
+                      : 'glass-nav-item'
+                  } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
                 >
                   <BookOpen className="w-5 h-5 mr-2" />
                   Academic Records
@@ -150,9 +213,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                   onClick={() => setActiveTab('report-cards')}
                   className={`${
                     activeTab === 'report-cards'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                      ? 'glass-nav-item active'
+                      : 'glass-nav-item'
+                  } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
                 >
                   <FileText className="w-5 h-5 mr-2" />
                   Report Cards
@@ -161,9 +224,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
                   onClick={() => setActiveTab('school-profile')}
                   className={`${
                     activeTab === 'school-profile'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                      ? 'glass-nav-item active'
+                      : 'glass-nav-item'
+                  } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
                 >
                   <Settings className="w-5 h-5 mr-2" />
                   School Profile
@@ -173,68 +236,82 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onSignOut }) => {
 
             <div className="mt-6">
               {activeTab === 'overview' ? (
-                <div className="bg-white shadow rounded-lg p-6">
-                  <h2 className="text-xl font-semibold text-gray-800 mb-4">School Dashboard</h2>
-                  <p className="text-gray-600 mb-4">
+                <div className="glass-card p-6 glass-fade-in">
+                  <h2 className="text-xl font-semibold text-text-glass-primary mb-4">School Dashboard</h2>
+                  <p className="text-text-glass-secondary mb-4">
                     Welcome to your school management dashboard. Here you can manage your school's academic records,
                     generate reports, and track student performance.
                   </p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
                     <div 
-                      className="bg-blue-50 p-6 rounded-lg shadow-sm border border-blue-100 flex items-center cursor-pointer hover:bg-blue-100 transition-colors"
+                      className="glass-card p-6 flex items-center cursor-pointer hover:scale-105 transition-all duration-300 glass-slide-up"
                       onClick={() => setActiveTab('academic-records')}
+                      style={{ animationDelay: '0.1s' }}
                     >
-                      <div className="bg-blue-100 p-3 rounded-full mr-4">
-                        <FileSpreadsheet className="w-6 h-6 text-blue-600" />
+                      <div className="glass-bg-blue p-3 rounded-full mr-4">
+                        <FileSpreadsheet className="w-6 h-6 text-text-glass-primary" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-blue-900">Academic Records</h3>
-                        <p className="text-sm text-blue-700">Manage student scores and assessments</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-green-50 p-6 rounded-lg shadow-sm border border-green-100 flex items-center cursor-pointer hover:bg-green-100 transition-colors">
-                      <div className="bg-green-100 p-3 rounded-full mr-4">
-                        <Users className="w-6 h-6 text-green-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-green-900">Student Management</h3>
-                        <p className="text-sm text-green-700">View and manage student information</p>
+                        <h3 className="font-medium text-text-glass-primary">Academic Records</h3>
+                        <p className="text-sm text-text-glass-secondary">Manage student scores and assessments</p>
                       </div>
                     </div>
                     
                     <div 
-                      className="bg-purple-50 p-6 rounded-lg shadow-sm border border-purple-100 flex items-center cursor-pointer hover:bg-purple-100 transition-colors"
+                      className="glass-card p-6 flex items-center cursor-pointer hover:scale-105 transition-all duration-300 glass-slide-up"
+                      style={{ animationDelay: '0.2s' }}
+                    >
+                      <div className="glass-bg-green p-3 rounded-full mr-4">
+                        <Users className="w-6 h-6 text-text-glass-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-text-glass-primary">Student Management</h3>
+                        <p className="text-sm text-text-glass-secondary">View and manage student information</p>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className="glass-card p-6 flex items-center cursor-pointer hover:scale-105 transition-all duration-300 glass-slide-up"
                       onClick={() => setActiveTab('report-cards')}
+                      style={{ animationDelay: '0.3s' }}
                     >
-                      <div className="bg-purple-100 p-3 rounded-full mr-4">
-                        <FileText className="w-6 h-6 text-purple-600" />
+                      <div className="glass-bg-purple p-3 rounded-full mr-4">
+                        <FileText className="w-6 h-6 text-text-glass-primary" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-purple-900">Report Cards</h3>
-                        <p className="text-sm text-purple-700">Generate and print student report cards</p>
+                        <h3 className="font-medium text-text-glass-primary">Report Cards</h3>
+                        <p className="text-sm text-text-glass-secondary">Generate and print student report cards</p>
                       </div>
                     </div>
                     
                     <div 
-                      className="bg-amber-50 p-6 rounded-lg shadow-sm border border-amber-100 flex items-center cursor-pointer hover:bg-amber-100 transition-colors"
+                      className="glass-card p-6 flex items-center cursor-pointer hover:scale-105 transition-all duration-300 glass-slide-up"
                       onClick={() => setActiveTab('school-profile')}
+                      style={{ animationDelay: '0.4s' }}
                     >
-                      <div className="bg-amber-100 p-3 rounded-full mr-4">
-                        <Settings className="w-6 h-6 text-amber-600" />
+                      <div className="glass-bg-amber p-3 rounded-full mr-4">
+                        <Settings className="w-6 h-6 text-text-glass-primary" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-amber-900">School Profile</h3>
-                        <p className="text-sm text-amber-700">Update your school's information and contact details</p>
+                        <h3 className="font-medium text-text-glass-primary">School Profile</h3>
+                        <p className="text-sm text-text-glass-secondary">Update your school's information and contact details</p>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : activeTab === 'academic-records' ? (
-                <ClassManagement schoolId={school?.id || ''} />
+                <ClassManagement 
+                  key={refreshKey}
+                  schoolId={school?.id || ''} 
+                  onOpenBulkUpload={handleOpenBulkUpload}
+                />
               ) : activeTab === 'report-cards' ? (
-                <ReportCardGenerator schoolId={school?.id || ''} onBack={() => setActiveTab('overview')} />
+                <ReportCardGenerator 
+                  schoolId={school?.id || ''} 
+                  onBack={() => setActiveTab('overview')}
+                  onOpenReportPreview={handleOpenReportPreview}
+                />
               ) : (
                 <SchoolProfileManagement 
                   schoolId={school?.id || ''} 

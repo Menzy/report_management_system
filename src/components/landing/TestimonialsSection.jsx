@@ -16,7 +16,7 @@ const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
       transition={{ duration: 0.5, delay }}
-      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"
+      className="glass-card"
     >
       <div className="flex items-center mb-4">
         <div className="text-yellow-400 flex">
@@ -26,8 +26,8 @@ const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
         </div>
       </div>
       <div className="relative mb-6">
-        <Quote className="absolute -top-2 -left-2 w-8 h-8 text-blue-100" />
-        <p className="text-gray-700 relative z-10">{quote}</p>
+        <Quote className="absolute -top-2 -left-2 w-8 h-8 text-white/30" />
+        <p className="text-text-glass-primary relative z-10">{quote}</p>
       </div>
       <div className="flex items-center">
         <Avatar className="h-12 w-12 mr-4">
@@ -35,8 +35,8 @@ const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
           <AvatarFallback>{author.split(' ').map(n => n[0]).join('')}</AvatarFallback>
         </Avatar>
         <div>
-          <h4 className="font-semibold text-gray-900">{author}</h4>
-          <p className="text-sm text-gray-500">{role}, {school}</p>
+          <h4 className="font-semibold text-text-glass-primary">{author}</h4>
+          <p className="text-sm text-text-glass-secondary">{role}, {school}</p>
         </div>
       </div>
     </motion.div>
@@ -85,8 +85,14 @@ const TestimonialsSection = () => {
   ];
 
   return (
-    <section id="testimonials" className="py-20">
-      <div className="container mx-auto px-4">
+    <section id="testimonials" className="py-20 relative">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+        <div className="absolute top-1/3 -right-40 w-96 h-96 glass-bg-green rounded-full opacity-15 blur-3xl"></div>
+        <div className="absolute bottom-1/3 -left-40 w-80 h-80 glass-bg-amber rounded-full opacity-20 blur-3xl"></div>
+      </div>
+      
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 20 }}
@@ -94,13 +100,13 @@ const TestimonialsSection = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium text-sm mb-4">
+          <span className="glass-bg-green px-4 py-2 rounded-full text-white font-medium text-sm mb-4 inline-block">
             Testimonials
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-text-glass-primary mb-4">
             Trusted by Educators Worldwide
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-text-glass-secondary max-w-3xl mx-auto">
             See what school administrators and teachers are saying about our report card management system.
           </p>
         </motion.div>
@@ -124,12 +130,12 @@ const TestimonialsSection = () => {
           animate={inView ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <h3 className="text-xl font-semibold text-center mb-8 text-gray-700">
+          <h3 className="text-xl font-semibold text-center mb-8 text-text-glass-secondary">
             Trusted by leading educational institutions
           </h3>
           <div className="flex flex-wrap justify-center items-center gap-8 opacity-70">
             {partnerLogos.map((partner, index) => (
-              <div key={index} className="flex items-center justify-center">
+              <div key={index} className="flex items-center justify-center glass-bg-subtle p-4 rounded-lg">
                 <img
                   src={partner.logo}
                   alt={partner.name}

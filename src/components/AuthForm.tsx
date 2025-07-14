@@ -47,12 +47,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
   };
 
   return (
-    <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+    <div className="w-full max-w-md glass-card glass-slide-up p-8 space-y-8">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-800">
+        <h1 className="text-3xl font-bold text-text-glass-primary">
           {isLogin ? 'Sign In' : 'Create Account'}
         </h1>
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-text-glass-secondary">
           {isLogin
             ? 'Sign in to access your school reports'
             : 'Create an account to manage school reports'}
@@ -60,19 +60,19 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
       </div>
 
       {error && (
-        <div className="p-4 text-sm text-red-700 bg-red-100 rounded-md">
+        <div className="glass-alert glass-alert-error">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="email" className="block text-sm font-medium text-text-glass-primary">
             Email
           </label>
           <div className="relative mt-1">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Mail className="w-5 h-5 text-gray-400" />
+              <Mail className="w-5 h-5 text-text-glass-muted" />
             </div>
             <input
               id="email"
@@ -82,19 +82,19 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="you@example.com"
             />
           </div>
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="password" className="block text-sm font-medium text-text-glass-primary">
             Password
           </label>
           <div className="relative mt-1">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Lock className="w-5 h-5 text-gray-400" />
+              <Lock className="w-5 h-5 text-text-glass-muted" />
             </div>
             <input
               id="password"
@@ -104,7 +104,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="••••••••"
             />
           </div>
@@ -114,10 +114,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
           <button
             type="submit"
             disabled={loading}
-            className="flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="glass-button glass-button-primary w-full"
           >
             {loading ? (
-              <span className="flex items-center">
+              <span className="flex items-center justify-center">
                 <svg className="w-5 h-5 mr-3 -ml-1 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -125,12 +125,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
                 Processing...
               </span>
             ) : isLogin ? (
-              <span className="flex items-center">
+              <span className="flex items-center justify-center">
                 <LogIn className="w-5 h-5 mr-2" />
                 Sign In
               </span>
             ) : (
-              <span className="flex items-center">
+              <span className="flex items-center justify-center">
                 <User className="w-5 h-5 mr-2" />
                 Create Account
               </span>
@@ -143,7 +143,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, initialIsLogin = true })
         <button
           type="button"
           onClick={() => setIsLogin(!isLogin)}
-          className="text-sm font-medium text-blue-600 hover:text-blue-500"
+          className="text-sm font-medium text-text-glass-accent hover:text-text-glass-primary transition-colors duration-200"
         >
           {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
         </button>

@@ -4,11 +4,17 @@ import { ArrowLeft, Users, FileText } from "lucide-react";
 import BatchReportGenerator from "./BatchReportGenerator";
 import IndividualReportGenerator from "./IndividualReportGenerator";
 
-const ReportCardGenerator = ({ schoolId, onBack }) => {
-  const [school, setSchool] = useState(null);
-  const [classes, setClasses] = useState([]);
+type ReportCardGeneratorProps = {
+  schoolId: string;
+  onBack: () => void;
+  onOpenReportPreview?: (report: any, classId: string) => void;
+};
+
+const ReportCardGenerator: React.FC<ReportCardGeneratorProps> = ({ schoolId, onBack, onOpenReportPreview }) => {
+  const [school, setSchool] = useState<any>(null);
+  const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("batch"); // "individual" or "batch"
 
   useEffect(() => {
@@ -34,7 +40,7 @@ const ReportCardGenerator = ({ schoolId, onBack }) => {
         if (classesError) throw classesError;
         setClasses(classesData);
       } catch (err) {
-        setError(err.message || "Failed to load data");
+        setError(err instanceof Error ? err.message : "Failed to load data");
         console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
@@ -48,43 +54,43 @@ const ReportCardGenerator = ({ schoolId, onBack }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="ml-2 text-gray-600">Loading report card generator...</p>
+      <div className="glass-card p-8 text-center glass-fade-in">
+        <div className="inline-block w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+        <p className="ml-2 text-text-glass-secondary">Loading report card generator...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="glass-card p-6 glass-fade-in">
       <div className="flex items-center mb-6">
         <button
           onClick={onBack}
-          className="mr-3 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+          className="glass-button glass-button-secondary mr-3 p-2"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h2 className="text-xl font-semibold text-gray-800">
+        <h2 className="text-xl font-semibold text-text-glass-primary">
           Report Card Generator
         </h2>
       </div>
 
       {error && (
-        <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md">
-          {error}
+        <div className="glass-alert glass-alert-error mb-4">
+          <p className="text-text-glass-primary text-sm">{error}</p>
         </div>
       )}
 
       <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
+        <div className="glass-card p-1 glass-slide-up">
+          <nav className="flex space-x-2">
             <button
               onClick={() => setActiveTab("batch")}
               className={`${
                 activeTab === "batch"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                  ? "glass-nav-item active"
+                  : "glass-nav-item"
+              } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
             >
               <Users className="w-5 h-5 mr-2" />
               Batch Reports
@@ -93,9 +99,9 @@ const ReportCardGenerator = ({ schoolId, onBack }) => {
               onClick={() => setActiveTab("individual")}
               className={`${
                 activeTab === "individual"
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+                  ? "glass-nav-item active"
+                  : "glass-nav-item"
+              } whitespace-nowrap py-3 px-4 font-medium text-sm flex items-center rounded-lg`}
             >
               <FileText className="w-5 h-5 mr-2" />
               Individual Reports
@@ -107,13 +113,11 @@ const ReportCardGenerator = ({ schoolId, onBack }) => {
       {activeTab === "batch" ? (
         <BatchReportGenerator 
           school={school} 
-          classes={classes} 
+          classes={classes}
+          onOpenReportPreview={onOpenReportPreview}
         />
       ) : (
-        <IndividualReportGenerator 
-          school={school} 
-          classes={classes} 
-        />
+        <IndividualReportGenerator />
       )}
     </div>
   );

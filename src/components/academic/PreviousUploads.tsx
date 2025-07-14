@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw, Download, Trash2, Upload, ArrowLeft } from 'luc
 import StudentScoresTable from './StudentScoresTable';
 import DataUpload from './DataUpload';
 import Modal from '../ui/Modal';
+import { confirmDelete } from '../../services/modalService';
 
 type PreviousUploadsProps = {
   schoolId: string;
@@ -53,6 +54,8 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
   const [filteredStudents, setFilteredStudents] = useState<StudentData[]>([]);
   const [groupedData, setGroupedData] = useState<{title: string; students: StudentData[]}[]>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  
+
   
   useEffect(() => {
     fetchStudentData();
@@ -396,65 +399,67 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
       ? `Are you sure you want to delete the filtered scores (${scoreIdsToDelete.length}) for this student?`
       : 'Are you sure you want to delete all scores for this student?';
     
-    if (!confirm(confirmMessage)) {
-      return;
-    }
-    
-    try {
-      // Only delete the specific score records that match the current filters
-      const { error } = await supabase
-        .from('scores')
-        .delete()
-        .in('id', scoreIdsToDelete);
-      
-      if (error) throw error;
-      
-      console.log(`Deleted ${scoreIdsToDelete.length} scores for student ${studentId}`);
-      fetchStudentData();
-      onDataChanged();
-    } catch (error) {
-      console.error('Error deleting student data:', error);
-      setError('Failed to delete student data. Please try again.');
-    }
+    confirmDelete(
+      confirmMessage,
+      async () => {
+        try {
+          // Only delete the specific score records that match the current filters
+          const { error } = await supabase
+            .from('scores')
+            .delete()
+            .in('id', scoreIdsToDelete);
+          
+          if (error) throw error;
+          
+          console.log(`Deleted ${scoreIdsToDelete.length} scores for student ${studentId}`);
+          fetchStudentData();
+          onDataChanged();
+        } catch (error) {
+          console.error('Error deleting student data:', error);
+          setError('Failed to delete student data. Please try again.');
+        }
+      }
+    );
   };
 
   const handleBulkDelete = async () => {
     if (selectedStudents.length === 0) return;
     
-    if (!confirm(`Are you sure you want to delete scores for ${selectedStudents.length} student(s)?`)) {
-      return;
-    }
-    
-    setIsDeleting(true);
-    
-    try {
-      // Get the IDs of the scores that are currently visible (match the filter) for each selected student
-      const scoreIdsToDelete = selectedStudents.flatMap(studentId => {
-        const student = filteredStudents.find(s => s.id === studentId);
-        return student ? student.scores.map(score => score.id) : [];
-      });
-      
-      if (scoreIdsToDelete.length === 0) return;
-      
-      // Only delete the specific score records that match the current filters
-      const { error } = await supabase
-        .from('scores')
-        .delete()
-        .in('id', scoreIdsToDelete);
-      
-      if (error) throw error;
-      
-      console.log(`Deleted ${scoreIdsToDelete.length} scores for ${selectedStudents.length} students`);
-      setSelectedStudents([]);
-      setSelectAll(false);
-      fetchStudentData();
-      onDataChanged();
-    } catch (error) {
-      console.error('Error deleting student data:', error);
-      setError('Failed to delete student data. Please try again.');
-    } finally {
-      setIsDeleting(false);
-    }
+    confirmDelete(
+      `Are you sure you want to delete scores for ${selectedStudents.length} student(s)?`,
+      async () => {
+        setIsDeleting(true);
+        
+        try {
+          // Get the IDs of the scores that are currently visible (match the filter) for each selected student
+          const scoreIdsToDelete = selectedStudents.flatMap(studentId => {
+            const student = filteredStudents.find(s => s.id === studentId);
+            return student ? student.scores.map(score => score.id) : [];
+          });
+          
+          if (scoreIdsToDelete.length === 0) return;
+          
+          // Only delete the specific score records that match the current filters
+          const { error } = await supabase
+            .from('scores')
+            .delete()
+            .in('id', scoreIdsToDelete);
+          
+          if (error) throw error;
+          
+          console.log(`Deleted ${scoreIdsToDelete.length} scores for ${selectedStudents.length} students`);
+          setSelectedStudents([]);
+          setSelectAll(false);
+          fetchStudentData();
+          onDataChanged();
+        } catch (error) {
+          console.error('Error deleting student data:', error);
+          setError('Failed to delete student data. Please try again.');
+        } finally {
+          setIsDeleting(false);
+        }
+      }
+    );
   };
 
   const toggleSelectStudent = (studentId: string) => {
@@ -747,6 +752,8 @@ const PreviousUploads: React.FC<PreviousUploadsProps> = ({
           <p className="text-gray-500">No data found for the selected filters.</p>
         </div>
       )}
+
+
     </div>
   );
 };

@@ -4,6 +4,7 @@ import AuthForm from './components/AuthForm';
 import OnboardingForm from './components/OnboardingForm';
 import Dashboard from './components/Dashboard';
 import LandingPage from './components/landing/LandingPage';
+import GlobalModalProvider from './components/ui/GlobalModalProvider';
 import { GraduationCap } from 'lucide-react';
 
 function App() {
@@ -12,122 +13,96 @@ function App() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
-  const [initialized, setInitialized] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(true);
 
 
+
+
   useEffect(() => {
-    // Prevent multiple initializations
-    if (initialized) return;
+    let isMounted = true;
 
-    // Check for an existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) {
-        setOnboardingLoading(true);
-        checkOnboardingStatus(session.user.id);
-        setShowLanding(false);
-      }
-      setLoading(false);
-      setInitialized(true);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        // Always update the session
+        if (!isMounted) return;
+
+        if (error) {
+          setLoading(false);
+          setShowLanding(true);
+          return;
+        }
+
         setSession(session);
-        
-        if (session) {
-          // If we have a session, check onboarding status
-          setOnboardingLoading(true);
-          try {
-            await checkOnboardingStatus(session.user.id);
-          } finally {
-            setOnboardingLoading(false);
-          }
+
+        if (session?.user?.id) {
+          checkOnboardingStatusFast(session.user.id);
           setShowLanding(false);
         } else {
-          // If no session, reset states
+          setHasCompletedOnboarding(null);
+          setShowLanding(true);
+        }
+      } catch (error) {
+        setHasCompletedOnboarding(null);
+        setShowLanding(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!isMounted) return;
+
+        setSession(session);
+        
+        if (session?.user?.id) {
+          checkOnboardingStatusFast(session.user.id);
+          setShowLanding(false);
+        } else {
           setHasCompletedOnboarding(null);
           setShowLanding(true);
         }
       }
     );
-    
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session);
-      setSession(session);
-      if (session) {
-        setOnboardingLoading(true);
-        checkOnboardingStatus(session.user.id).finally(() => {
-          setOnboardingLoading(false);
-        });
-        setShowLanding(false);
-      }
-      setLoading(false);
-      setInitialized(true);
-    });
 
-    // Handle visibility change to prevent unnecessary refreshes
-    const handleVisibilityChange = () => {
-      // Do nothing when the page becomes visible again
-      // This prevents re-authentication checks on tab focus
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    initializeAuth();
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [initialized]);
+  }, []); // Empty dependency array - only run once
 
-  const checkOnboardingStatus = async (userId: string) => {
+  const checkOnboardingStatusFast = async (userId: string) => {
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Quick timeout')), 2000)
+    );
+    
+    const checkPromise = supabase
+      .from('profiles')
+      .select('has_completed_onboarding')
+      .eq('id', userId)
+      .single();
+    
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('has_completed_onboarding')
-        .eq('id', userId)
-        .single();
-
+      const { data, error } = await Promise.race([checkPromise, timeoutPromise]) as any;
+      
       if (error) {
-        console.error('Error checking onboarding status:', error);
         setHasCompletedOnboarding(false);
       } else {
-        setHasCompletedOnboarding(data?.has_completed_onboarding || false);
+        const onboardingComplete = data?.has_completed_onboarding || false;
+        setHasCompletedOnboarding(onboardingComplete);
       }
     } catch (error) {
-      console.error('Error checking onboarding status:', error);
       setHasCompletedOnboarding(false);
-    } finally {
-      setOnboardingLoading(false);
     }
+    
+    setOnboardingLoading(false);
   };
 
   const handleAuthSuccess = async () => {
-    try {
-      // Force a session refresh to ensure we have the latest data
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('Auth success, session:', session);
-      
-      if (session) {
-        setSession(session);
-        setOnboardingLoading(true);
-        await checkOnboardingStatus(session.user.id);
-        setShowLanding(false);
-      }
-    } catch (error) {
-      console.error('Error in handleAuthSuccess:', error);
-      // If there's an error, reset to login state
-      setSession(null);
-      setShowLanding(true);
-    } finally {
-      setOnboardingLoading(false);
-    }
+    // Let onAuthStateChange handle the session update to prevent race conditions
   };
 
   const handleOnboardingSuccess = () => {
@@ -142,10 +117,10 @@ function App() {
 
   if (loading || onboardingLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <div className="page-bg-primary flex items-center justify-center min-h-screen">
+        <div className="glass-card p-8 text-center glass-fade-in">
+          <div className="inline-block w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-2 text-text-glass-secondary">Loading...</p>
         </div>
       </div>
     );
@@ -169,29 +144,34 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="page-bg-primary min-h-screen">
       {!session ? (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="mb-8 text-center">
+        <div className="flex flex-col items-center justify-center min-h-screen px-4">
+          <div className="mb-8 text-center glass-fade-in">
             <div className="flex items-center justify-center mb-4">
-              <GraduationCap className="w-16 h-16 text-blue-600" />
+              <div className="glass-bg-accent p-4 rounded-full">
+                <GraduationCap className="w-16 h-16 text-white" />
+              </div>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900">School Report Management System</h1>
-            <p className="mt-2 text-xl text-gray-600">Streamline your school reporting process</p>
+            <h1 className="text-4xl font-bold text-text-glass-primary">School Report Management System</h1>
+            <p className="mt-2 text-xl text-text-glass-secondary">Streamline your school reporting process</p>
           </div>
           <AuthForm onSuccess={handleAuthSuccess} initialIsLogin={isLoginMode} />
         </div>
       ) : hasCompletedOnboarding === false ? (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-gray-900">Welcome to School Report Management System</h1>
-            <p className="mt-2 text-gray-600">Let's set up your school profile</p>
+        <div className="flex flex-col items-center min-h-screen px-4 py-16">
+          <div className="mb-8 text-center glass-fade-in">
+            <h1 className="text-3xl font-bold text-text-glass-primary">Welcome to School Report Management System</h1>
+            <p className="mt-2 text-text-glass-secondary">Let's set up your school profile</p>
           </div>
           <OnboardingForm userId={session.user.id} onSuccess={handleOnboardingSuccess} />
         </div>
       ) : hasCompletedOnboarding === true ? (
         <Dashboard userId={session.user.id} onSignOut={handleSignOut} />
       ) : null}
+      
+      {/* Global Modal Provider - renders modals at the top level with highest z-index */}
+      <GlobalModalProvider />
     </div>
   );
 }

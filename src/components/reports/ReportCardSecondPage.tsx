@@ -228,30 +228,31 @@ const ReportCardSecondPage = forwardRef<HTMLDivElement, ReportCardSecondPageProp
         </div>
 
         {/* Performance Comparison Chart */}
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-4 text-center">Subject Performance Comparison</h3>
+        <div className="mt-6 -mx-16">
+          <h3 className="text-lg font-semibold mb-4 text-center px-16">Subject Performance Comparison</h3>
           
-          {/* Bar Chart */}
+          {/* Bar Chart - Full Width */}
           <div className="mb-8">
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={comparisonData}
+                  data={comparisonData.map((item, index) => ({
+                    ...item,
+                    subjectNumber: index + 1
+                  }))}
                   margin={{
                     top: 30,
-                    right: 30,
-                    left: 20,
-                    bottom: 60,
+                    right: 10,
+                    left: 10,
+                    bottom: 40,
                   }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis 
-                    dataKey="subject" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    fontSize={10}
+                    dataKey="subjectNumber" 
+                    fontSize={12}
                     stroke="#333"
+                    height={40}
                   />
                   <YAxis 
                     fontSize={10}
@@ -272,7 +273,7 @@ const ReportCardSecondPage = forwardRef<HTMLDivElement, ReportCardSecondPageProp
             </div>
             
             {/* Legend */}
-            <div className="flex justify-center mt-4 space-x-6 text-sm">
+            <div className="flex justify-center mt-4 space-x-6 text-sm px-16">
               <div className="flex items-center">
                 <div className="w-4 h-4 bg-blue-500 mr-2"></div>
                 <span>Student Score</span>

@@ -156,43 +156,45 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="ml-2 text-gray-600">Loading school profile...</p>
+      <div className="glass-card p-8 text-center glass-fade-in">
+        <div className="inline-block w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+        <p className="ml-2 text-text-glass-secondary">Loading school profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="glass-card p-6 glass-fade-in">
       <div className="flex items-center mb-6">
         <button
           onClick={onBack}
-          className="mr-3 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+          className="glass-button glass-button-secondary mr-3 p-2"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h2 className="text-xl font-semibold text-gray-800">
+        <h2 className="text-xl font-semibold text-text-glass-primary">
           School Profile Management
         </h2>
       </div>
 
       {error && (
-        <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md">
-          {error}
+        <div className="glass-alert glass-alert-error mb-4">
+          <p className="text-text-glass-primary text-sm">{error}</p>
         </div>
       )}
 
       {successMessage && (
-        <div className="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-md flex items-center">
-          <Check className="w-5 h-5 mr-2" />
-          {successMessage}
+        <div className="glass-alert glass-alert-success mb-4">
+          <div className="flex items-center">
+            <Check className="w-5 h-5 mr-2 text-text-glass-primary" />
+            <p className="text-text-glass-primary text-sm">{successMessage}</p>
+          </div>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="flex items-center justify-center mb-6">
-          <div className="relative w-32 h-32 overflow-hidden rounded-full border-2 border-gray-200">
+        <div className="flex items-center justify-center mb-6 glass-slide-up">
+          <div className="relative w-32 h-32 overflow-hidden rounded-full glass-border">
             {(currentCrestUrl || previewUrl) ? (
               <img 
                 src={previewUrl || currentCrestUrl || ''} 
@@ -200,14 +202,14 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="flex items-center justify-center w-full h-full bg-gray-100">
-                <Building2 className="w-16 h-16 text-gray-400" />
+              <div className="flex items-center justify-center w-full h-full glass-bg-subtle">
+                <Building2 className="w-16 h-16 text-text-glass-secondary" />
               </div>
             )}
             
             <label 
               htmlFor="crest-upload" 
-              className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+              className="absolute inset-0 flex items-center justify-center glass-bg-dark opacity-0 hover:opacity-100 transition-opacity cursor-pointer rounded-full"
             >
               <Upload className="w-8 h-8 text-white" />
             </label>
@@ -221,13 +223,13 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
           </div>
         </div>
 
-        <div>
-          <label htmlFor="schoolName" className="block text-sm font-medium text-gray-700">
+        <div className="glass-slide-up" style={{ animationDelay: '0.1s' }}>
+          <label htmlFor="schoolName" className="block text-sm font-medium text-text-glass-primary mb-2">
             School Name
           </label>
-          <div className="relative mt-1">
+          <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Building2 className="w-5 h-5 text-gray-400" />
+              <Building2 className="w-5 h-5 text-text-glass-secondary" />
             </div>
             <input
               type="text"
@@ -236,19 +238,19 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
               required
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="e.g. Springfield Elementary School"
             />
           </div>
         </div>
 
-        <div>
-          <label htmlFor="schoolSlogan" className="block text-sm font-medium text-gray-700">
+        <div className="glass-slide-up" style={{ animationDelay: '0.2s' }}>
+          <label htmlFor="schoolSlogan" className="block text-sm font-medium text-text-glass-primary mb-2">
             School Slogan
           </label>
-          <div className="relative mt-1">
+          <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <MessageSquareQuote className="w-5 h-5 text-gray-400" />
+              <MessageSquareQuote className="w-5 h-5 text-text-glass-secondary" />
             </div>
             <input
               type="text"
@@ -256,19 +258,19 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
               name="schoolSlogan"
               value={schoolSlogan}
               onChange={(e) => setSchoolSlogan(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="e.g. Nurturing Minds, Building Futures"
             />
           </div>
         </div>
 
-        <div>
-          <label htmlFor="schoolAddress" className="block text-sm font-medium text-gray-700">
+        <div className="glass-slide-up" style={{ animationDelay: '0.3s' }}>
+          <label htmlFor="schoolAddress" className="block text-sm font-medium text-text-glass-primary mb-2">
             School Address
           </label>
-          <div className="relative mt-1">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <MapPin className="w-5 h-5 text-gray-400" />
+          <div className="relative">
+            <div className="absolute top-3 left-0 flex items-center pl-3 pointer-events-none">
+              <MapPin className="w-5 h-5 text-text-glass-secondary" />
             </div>
             <textarea
               id="schoolAddress"
@@ -277,19 +279,19 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
               value={schoolAddress}
               onChange={(e) => setSchoolAddress(e.target.value)}
               rows={3}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10 resize-none"
               placeholder="e.g. 123 Education Street, Springfield, ST 12345"
             />
           </div>
         </div>
 
-        <div>
-          <label htmlFor="schoolEmail" className="block text-sm font-medium text-gray-700">
+        <div className="glass-slide-up" style={{ animationDelay: '0.4s' }}>
+          <label htmlFor="schoolEmail" className="block text-sm font-medium text-text-glass-primary mb-2">
             School Email
           </label>
-          <div className="relative mt-1">
+          <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Mail className="w-5 h-5 text-gray-400" />
+              <Mail className="w-5 h-5 text-text-glass-secondary" />
             </div>
             <input
               type="email"
@@ -297,19 +299,19 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
               name="schoolEmail"
               value={schoolEmail}
               onChange={(e) => setSchoolEmail(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="e.g. info@yourschool.edu"
             />
           </div>
         </div>
 
-        <div>
-          <label htmlFor="schoolPhone" className="block text-sm font-medium text-gray-700">
+        <div className="glass-slide-up" style={{ animationDelay: '0.5s' }}>
+          <label htmlFor="schoolPhone" className="block text-sm font-medium text-text-glass-primary mb-2">
             School Phone Number
           </label>
-          <div className="relative mt-1">
+          <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <Phone className="w-5 h-5 text-gray-400" />
+              <Phone className="w-5 h-5 text-text-glass-secondary" />
             </div>
             <input
               type="tel"
@@ -317,17 +319,17 @@ const SchoolProfileManagement: React.FC<SchoolProfileManagementProps> = ({
               name="schoolPhone"
               value={schoolPhone}
               onChange={(e) => setSchoolPhone(e.target.value)}
-              className="block w-full pl-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="glass-input pl-10"
               placeholder="e.g. (123) 456-7890"
             />
           </div>
         </div>
 
-        <div>
+        <div className="glass-slide-up" style={{ animationDelay: '0.6s' }}>
           <button
             type="submit"
             disabled={saving}
-            className="flex justify-center items-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="glass-button glass-button-primary w-full flex justify-center items-center"
           >
             {saving ? (
               <>

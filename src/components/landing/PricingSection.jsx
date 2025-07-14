@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
 import { Check, X } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
+
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 
@@ -101,8 +101,14 @@ const PricingSection = () => {
   };
 
   return (
-    <section id="pricing" className="py-20 bg-gray-50">
-      <div className="container mx-auto px-4">
+    <section id="pricing" className="py-20 relative">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+        <div className="absolute top-1/3 -left-40 w-96 h-96 glass-bg-success rounded-full opacity-15 blur-3xl"></div>
+        <div className="absolute bottom-1/3 -right-40 w-80 h-80 glass-bg-amber rounded-full opacity-20 blur-3xl"></div>
+      </div>
+      
+      <div className="container mx-auto px-4 relative z-10">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 20 }}
@@ -110,23 +116,41 @@ const PricingSection = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium text-sm mb-4">
+          <span className="glass-bg-success px-4 py-2 rounded-full text-white font-medium text-sm mb-4 inline-block">
             Pricing Plans
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-text-glass-primary mb-4">
             Simple, Transparent Pricing
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8">
+          <p className="text-xl text-text-glass-secondary max-w-3xl mx-auto mb-8">
             Choose the plan that works best for your school's needs. No hidden fees or surprises.
           </p>
 
           <div className="flex justify-center mb-8">
-            <Tabs defaultValue="yearly" value={billingCycle} onValueChange={setBillingCycle} className="w-full max-w-xs">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="quarterly">Quarterly</TabsTrigger>
-                <TabsTrigger value="yearly">Yearly (Save 35%)</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="glass-card glass-card-sm rounded-full p-1 w-full max-w-xs">
+              <div className="grid w-full grid-cols-2 gap-1">
+                <button
+                  onClick={() => setBillingCycle('quarterly')}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
+                    billingCycle === 'quarterly'
+                      ? 'glass-button glass-button-primary'
+                      : 'text-text-glass-secondary hover:text-text-glass-primary hover:bg-white/10 rounded-full'
+                  }`}
+                >
+                  Quarterly
+                </button>
+                <button
+                  onClick={() => setBillingCycle('yearly')}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
+                    billingCycle === 'yearly'
+                      ? 'glass-button glass-button-primary'
+                      : 'text-text-glass-secondary hover:text-text-glass-primary hover:bg-white/10 rounded-full'
+                  }`}
+                >
+                  Yearly
+                </button>
+              </div>
+            </div>
           </div>
         </motion.div>
 
@@ -138,49 +162,48 @@ const PricingSection = () => {
         >
           {pricingPlans.map((plan, index) => (
             <motion.div key={plan.name} variants={itemVariants} className="flex">
-              <Card className={`w-full flex flex-col ${plan.popular ? 'border-blue-500 shadow-lg relative' : ''}`}>
+              <div className={`glass-card glass-card-no-padding w-full flex flex-col ${plan.popular ? 'glass-bg-strong border-2 border-blue-400 relative' : ''}`}>
                 {plan.popular && (
                   <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2">
-                    <span className="bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    <span className="glass-bg-accent text-white text-xs font-semibold px-3 py-1 rounded-full">
                       Most Popular
                     </span>
                   </div>
                 )}
-                <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
+                <div className="p-6 border-b border-glass-border">
+                  <h3 className="text-xl font-bold text-text-glass-primary">{plan.name}</h3>
+                  <p className="text-text-glass-secondary mt-2">{plan.description}</p>
                   <div className="mt-4">
-                    <span className="text-4xl font-bold">${plan.price[billingCycle]}</span>
-                    <span className="text-gray-500 ml-2">
+                    <span className="text-4xl font-bold text-text-glass-primary">${plan.price[billingCycle]}</span>
+                    <span className="text-text-glass-muted ml-2">
                       {plan.price[billingCycle] > 0 ? `/ ${billingCycle === 'yearly' ? 'year' : 'quarter'}` : ''}
                     </span>
                   </div>
-                </CardHeader>
-                <CardContent className="flex-grow">
+                </div>
+                <div className="flex-grow p-6">
                   <ul className="space-y-3">
                     {plan.features.map((feature, featureIndex) => (
                       <li key={featureIndex} className="flex items-start">
                         {feature.included ? (
-                          <Check className="w-5 h-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                          <Check className="w-5 h-5 text-green-400 mr-2 flex-shrink-0 mt-0.5" />
                         ) : (
-                          <X className="w-5 h-5 text-gray-300 mr-2 flex-shrink-0 mt-0.5" />
+                          <X className="w-5 h-5 text-text-glass-muted mr-2 flex-shrink-0 mt-0.5" />
                         )}
-                        <span className={feature.included ? 'text-gray-700' : 'text-gray-400'}>
+                        <span className={feature.included ? 'text-text-glass-primary' : 'text-text-glass-muted'}>
                           {feature.name}
                         </span>
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    variant={plan.popular ? "primary" : "outline"} 
-                    className="w-full"
+                </div>
+                <div className="p-6 border-t border-glass-border">
+                  <button 
+                    className={`glass-button w-full ${plan.popular ? 'glass-button-primary' : 'glass-button-secondary'}`}
                   >
                     {plan.cta}
-                  </Button>
-                </CardFooter>
-              </Card>
+                  </button>
+                </div>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -191,11 +214,11 @@ const PricingSection = () => {
           transition={{ duration: 0.5, delay: 0.6 }}
           className="mt-16 text-center"
         >
-          <h3 className="text-xl font-semibold mb-2">Need a custom plan for your district?</h3>
-          <p className="text-gray-600 mb-4">
+          <h3 className="text-xl font-semibold mb-2 text-text-glass-primary">Need a custom plan for your district?</h3>
+          <p className="text-text-glass-secondary mb-4">
             Contact us for custom pricing options for larger educational institutions.
           </p>
-          <Button variant="outline">Contact Sales</Button>
+          <button className="glass-button glass-button-secondary">Contact Sales</button>
         </motion.div>
       </div>
     </section>

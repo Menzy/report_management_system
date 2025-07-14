@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { supabase, Class } from '../../lib/supabase';
 import { Plus, Trash2, Edit, BookOpen, X, Pen, CheckCircle } from 'lucide-react';
 import SubjectManagement from './SubjectManagement';
+import { confirmDelete } from '../../services/modalService';
 
 type ClassManagementProps = {
   schoolId: string;
+  onOpenBulkUpload?: (schoolId: string, classItem: any) => void;
 };
 
-const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
+const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId, onOpenBulkUpload }) => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +17,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
   const [isAddingClass, setIsAddingClass] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [editingClass, setEditingClass] = useState<{id: string, name: string} | null>(null);
+  
+
 
   useEffect(() => {
     if (!schoolId) return;
@@ -105,26 +109,27 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
   };
 
   const handleDeleteClass = async (classId: string) => {
-    if (!confirm('Are you sure you want to delete this class? This will also delete all associated subjects, students, and scores.')) {
-      return;
-    }
+    confirmDelete(
+      'Are you sure you want to delete this class? This will also delete all associated subjects, students, and scores.',
+      async () => {
+        try {
+          const { error } = await supabase
+            .from('classes')
+            .delete()
+            .eq('id', classId);
 
-    try {
-      const { error } = await supabase
-        .from('classes')
-        .delete()
-        .eq('id', classId);
-
-      if (error) throw error;
-      
-      setClasses(classes.filter(c => c.id !== classId));
-      if (selectedClass?.id === classId) {
-        setSelectedClass(null);
+          if (error) throw error;
+          
+          setClasses(classes.filter(c => c.id !== classId));
+          if (selectedClass?.id === classId) {
+            setSelectedClass(null);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Failed to delete class');
+          console.error('Error deleting class:', err);
+        }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete class');
-      console.error('Error deleting class:', err);
-    }
+    );
   };
 
   const handleSelectClass = (classItem: Class) => {
@@ -137,9 +142,9 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
 
   if (loading && classes.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="ml-2 text-gray-600">Loading classes...</p>
+      <div className="glass-card p-8 text-center glass-fade-in">
+        <div className="inline-block w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+        <p className="ml-2 text-text-glass-secondary">Loading classes...</p>
       </div>
     );
   }
@@ -149,18 +154,19 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
       <SubjectManagement 
         schoolId={schoolId} 
         classItem={selectedClass} 
-        onBack={handleBackToClasses} 
+        onBack={handleBackToClasses}
+        onOpenBulkUpload={onOpenBulkUpload}
       />
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="glass-card p-6 glass-fade-in">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Class Management</h2>
+        <h2 className="text-xl font-semibold text-text-glass-primary">Class Management</h2>
         <button
           onClick={() => setIsAddingClass(true)}
-          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          className="glass-button glass-button-primary flex items-center"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Class
@@ -168,14 +174,14 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
       </div>
 
       {error && (
-        <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-md">
-          {error}
+        <div className="glass-alert glass-alert-error mb-4">
+          <p className="text-text-glass-primary text-sm">{error}</p>
         </div>
       )}
 
       {isAddingClass && (
-        <div className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Add New Classes</h3>
+        <div className="glass-card mb-6 p-4 glass-slide-up">
+          <h3 className="text-lg font-medium text-text-glass-primary mb-3">Add New Classes</h3>
           <div className="space-y-3">
             {newClassFields.map((field, index) => (
               <div key={index} className="flex items-center">
@@ -184,12 +190,12 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                   value={field}
                   onChange={(e) => handleFieldChange(index, e.target.value)}
                   placeholder="Class name (e.g., Grade 1, JSS 1, Primary 1)"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="glass-input flex-1"
                 />
                 {newClassFields.length > 1 && (
                   <button
                     onClick={() => handleRemoveField(index)}
-                    className="ml-2 p-2 text-gray-500 hover:text-red-500 hover:bg-gray-100 rounded-full"
+                    className="glass-button glass-button-danger ml-2 p-2"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -197,7 +203,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                 {index === newClassFields.length - 1 && (
                   <button
                     onClick={handleAddField}
-                    className="ml-2 p-2 text-blue-500 hover:text-blue-700 hover:bg-gray-100 rounded-full"
+                    className="glass-button glass-button-secondary ml-2 p-2"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -211,13 +217,13 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                 setNewClassFields(['']);
                 setIsAddingClass(false);
               }}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              className="glass-button glass-button-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleAddClasses}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="glass-button glass-button-primary"
             >
               Add Classes
             </button>
@@ -226,16 +232,16 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
       )}
 
       {classes.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <BookOpen className="w-6 h-6 text-gray-400" />
+        <div className="text-center py-8 glass-fade-in">
+          <div className="mx-auto w-12 h-12 glass-bg-subtle rounded-full flex items-center justify-center mb-4">
+            <BookOpen className="w-6 h-6 text-text-glass-secondary" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No Classes Added</h3>
-          <p className="text-gray-500 mb-4">Start by adding your first class</p>
+          <h3 className="text-lg font-medium text-text-glass-primary mb-1">No Classes Added</h3>
+          <p className="text-text-glass-secondary mb-4">Start by adding your first class</p>
           {!isAddingClass && (
             <button
               onClick={() => setIsAddingClass(true)}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              className="glass-button glass-button-primary inline-flex items-center"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Your First Class
@@ -244,10 +250,11 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map((classItem) => (
+          {classes.map((classItem, index) => (
             <div
               key={classItem.id}
-              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+              className="glass-card p-4 hover:scale-105 transition-all duration-300 glass-slide-up"
+              style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="flex justify-between items-start mb-2">
                 {editingClass?.id === classItem.id ? (
@@ -255,7 +262,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                     type="text"
                     value={editingClass.name}
                     onChange={(e) => setEditingClass({ ...editingClass, name: e.target.value })}
-                    className="flex-1 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="glass-input flex-1"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleEditClass();
                       if (e.key === 'Escape') setEditingClass(null);
@@ -263,20 +270,20 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                     autoFocus
                   />
                 ) : (
-                  <h3 className="text-lg font-medium text-gray-900">{classItem.name}</h3>
+                  <h3 className="text-lg font-medium text-text-glass-primary">{classItem.name}</h3>
                 )}
                 <div className="flex space-x-2">
                   {editingClass?.id === classItem.id ? (
                     <>
                       <button
                         onClick={handleEditClass}
-                        className="p-1 text-green-600 hover:text-green-700 hover:bg-gray-100 rounded-full"
+                        className="glass-button glass-button-success p-1"
                       >
                         <CheckCircle className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setEditingClass(null)}
-                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                        className="glass-button glass-button-secondary p-1"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -285,13 +292,13 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
                     <>
                       <button
                         onClick={() => setEditingClass({ id: classItem.id, name: classItem.name })}
-                        className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                        className="glass-button glass-button-secondary p-1"
                       >
                         <Pen className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteClass(classItem.id)}
-                        className="p-1 text-red-500 hover:text-red-700 hover:bg-gray-100 rounded-full"
+                        className="glass-button glass-button-danger p-1"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -301,7 +308,7 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
               </div>
               <button
                 onClick={() => handleSelectClass(classItem)}
-                className="mt-3 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 flex items-center justify-center"
+                className="glass-button glass-button-primary mt-3 w-full flex items-center justify-center"
               >
                 <BookOpen className="w-4 h-4 mr-2" />
                 Manage Subjects
@@ -310,6 +317,8 @@ const ClassManagement: React.FC<ClassManagementProps> = ({ schoolId }) => {
           ))}
         </div>
       )}
+
+
     </div>
   );
 };

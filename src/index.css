@@ -1,3 +1,6 @@
+/* Import Glassmorphism Design System */
+@import './styles/glassmorphism.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
