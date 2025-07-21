@@ -5,6 +5,7 @@ import OnboardingForm from './components/OnboardingForm';
 import Dashboard from './components/Dashboard';
 import LandingPage from './components/landing/LandingPage';
 import GlobalModalProvider from './components/ui/GlobalModalProvider';
+import { ThemeProvider } from './context/ThemeContext';
 import { GraduationCap } from 'lucide-react';
 
 function App() {
@@ -143,60 +144,66 @@ function App() {
 
   if (loading || onboardingLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <ThemeProvider defaultTheme="system" storageKey="school-reports-theme">
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="p-8 text-center">
+            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-2 text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
+      </ThemeProvider>
     );
   }
 
   if (showLanding) {
     return (
-      <div className="min-h-screen">
-        <LandingPage 
-          onSignIn={() => {
-            setIsLoginMode(true);
-            setShowLanding(false);
-          }} 
-          onSignUp={() => {
-            setIsLoginMode(false);
-            setShowLanding(false);
-          }} 
-        />
-      </div>
+      <ThemeProvider defaultTheme="system" storageKey="school-reports-theme">
+        <div className="min-h-screen">
+          <LandingPage 
+            onSignIn={() => {
+              setIsLoginMode(true);
+              setShowLanding(false);
+            }} 
+            onSignUp={() => {
+              setIsLoginMode(false);
+              setShowLanding(false);
+            }} 
+          />
+        </div>
+      </ThemeProvider>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {!session ? (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="mb-8 text-center">
-            <div className="flex items-center justify-center mb-4">
-              <GraduationCap className="w-16 h-16 text-blue-600" />
+    <ThemeProvider defaultTheme="system" storageKey="school-reports-theme">
+      <div className="min-h-screen bg-background">
+        {!session ? (
+          <div className="flex flex-col items-center justify-center min-h-screen">
+            <div className="mb-8 text-center">
+              <div className="flex items-center justify-center mb-4">
+                <GraduationCap className="w-16 h-16 text-primary" />
+              </div>
+              <h1 className="text-4xl font-bold text-foreground">School Report Management System</h1>
+              <p className="mt-2 text-xl text-muted-foreground">Streamline your school reporting process</p>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900">School Report Management System</h1>
-            <p className="mt-2 text-xl text-gray-600">Streamline your school reporting process</p>
+            <AuthForm onSuccess={handleAuthSuccess} initialIsLogin={isLoginMode} />
           </div>
-          <AuthForm onSuccess={handleAuthSuccess} initialIsLogin={isLoginMode} />
-        </div>
-      ) : hasCompletedOnboarding === false ? (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-gray-900">Welcome to School Report Management System</h1>
-            <p className="mt-2 text-gray-600">Let's set up your school profile</p>
+        ) : hasCompletedOnboarding === false ? (
+          <div className="flex flex-col items-center justify-center min-h-screen">
+            <div className="mb-8 text-center">
+              <h1 className="text-3xl font-bold text-foreground">Welcome to School Report Management System</h1>
+              <p className="mt-2 text-muted-foreground">Let's set up your school profile</p>
+            </div>
+            <OnboardingForm userId={session.user.id} onSuccess={handleOnboardingSuccess} />
           </div>
-          <OnboardingForm userId={session.user.id} onSuccess={handleOnboardingSuccess} />
-        </div>
-      ) : hasCompletedOnboarding === true ? (
-        <Dashboard userId={session.user.id} onSignOut={handleSignOut} />
-      ) : null}
-      
-      {/* Global Modal Provider - renders modals at the top level with highest z-index */}
-      <GlobalModalProvider />
-    </div>
+        ) : hasCompletedOnboarding === true ? (
+          <Dashboard userId={session.user.id} onSignOut={handleSignOut} />
+        ) : null}
+        
+        {/* Global Modal Provider - renders modals at the top level with highest z-index */}
+        <GlobalModalProvider />
+      </div>
+    </ThemeProvider>
   );
 }
 

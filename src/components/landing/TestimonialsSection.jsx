@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { Star, Quote } from 'lucide-react';
+import { Star, Quote, Users } from 'lucide-react';
+import { Container } from '../ui/Container';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 
 const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
@@ -16,18 +17,18 @@ const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
       initial={{ opacity: 0, y: 30 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
       transition={{ duration: 0.5, delay }}
-      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"
+      className="bg-card p-6 rounded-xl shadow-sm border border-border hover:shadow-md transition-shadow duration-300"
     >
       <div className="flex items-center mb-4">
-        <div className="text-yellow-400 flex">
+        <div className="text-yellow-500 flex">
           {[...Array(5)].map((_, i) => (
             <Star key={i} className="w-4 h-4 fill-current" />
           ))}
         </div>
       </div>
       <div className="relative mb-6">
-        <Quote className="absolute -top-2 -left-2 w-8 h-8 text-blue-100" />
-        <p className="text-gray-700 relative z-10">{quote}</p>
+        <Quote className="absolute -top-2 -left-2 w-8 h-8 text-primary/20" />
+        <p className="text-card-foreground relative z-10">{quote}</p>
       </div>
       <div className="flex items-center">
         <Avatar className="h-12 w-12 mr-4">
@@ -35,8 +36,8 @@ const TestimonialCard = ({ quote, author, role, school, image, delay }) => {
           <AvatarFallback>{author.split(' ').map(n => n[0]).join('')}</AvatarFallback>
         </Avatar>
         <div>
-          <h4 className="font-semibold text-gray-900">{author}</h4>
-          <p className="text-sm text-gray-500">{role}, {school}</p>
+          <h4 className="font-semibold text-card-foreground">{author}</h4>
+          <p className="text-sm text-muted-foreground">{role}, {school}</p>
         </div>
       </div>
     </motion.div>
@@ -85,8 +86,8 @@ const TestimonialsSection = () => {
   ];
 
   return (
-    <section id="testimonials" className="py-20">
-      <div className="container mx-auto px-4">
+    <section id="testimonials" className="py-20 bg-background">
+      <Container>
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 20 }}
@@ -94,13 +95,14 @@ const TestimonialsSection = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium text-sm mb-4">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary font-medium text-sm mb-4 border border-primary/20">
+            <Users className="w-4 h-4 mr-2" />
             Testimonials
-          </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Trusted by Educators Worldwide
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             See what school administrators and teachers are saying about our report card management system.
           </p>
         </motion.div>
@@ -124,24 +126,24 @@ const TestimonialsSection = () => {
           animate={inView ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <h3 className="text-xl font-semibold text-center mb-8 text-gray-700">
+          <h3 className="text-xl font-semibold text-center mb-8 text-foreground">
             Trusted by leading educational institutions
           </h3>
-          <div className="flex flex-wrap justify-center items-center gap-8 opacity-70">
+          <div className="flex flex-wrap justify-center items-center gap-8 opacity-60">
             {partnerLogos.map((partner, index) => (
               <div key={index} className="flex items-center justify-center">
                 <img
                   src={partner.logo}
                   alt={partner.name}
-                  className="h-12 grayscale hover:grayscale-0 transition-all duration-300"
+                  className="h-12 grayscale hover:grayscale-0 transition-all duration-300 dark:invert"
                 />
               </div>
             ))}
           </div>
         </motion.div>
-      </div>
-    </section>
-  );
+       </Container>
+     </section>
+   );
 };
 
 export default TestimonialsSection;

@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { FileText, BarChart, Users, Clock, Download, Shield } from 'lucide-react';
+import { Container } from '../ui/Container';
+import { FileText, BarChart, Users, Clock, Download, Shield, Sparkles } from 'lucide-react';
 
 const FeatureCard = ({ icon: Icon, title, description, delay }) => {
   const [ref, inView] = useInView({
@@ -15,13 +16,13 @@ const FeatureCard = ({ icon: Icon, title, description, delay }) => {
       initial={{ y: 50, opacity: 0 }}
       animate={inView ? { y: 0, opacity: 1 } : { y: 50, opacity: 0 }}
       transition={{ duration: 0.5, delay }}
-      className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+      className="bg-card rounded-xl p-6 shadow-sm border border-border hover:shadow-md transition-all duration-300 group"
     >
-      <div className="bg-blue-50 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-        <Icon className="w-6 h-6 text-blue-600" />
+      <div className="bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+        <Icon className="w-6 h-6 text-primary" />
       </div>
-      <h3 className="text-xl font-semibold mb-3 text-gray-900">{title}</h3>
-      <p className="text-gray-600">{description}</p>
+      <h3 className="text-xl font-semibold mb-3 text-card-foreground">{title}</h3>
+      <p className="text-muted-foreground">{description}</p>
     </motion.div>
   );
 };
@@ -72,8 +73,8 @@ const FeaturesSection = () => {
   ];
 
   return (
-    <section id="features" className="py-20 bg-gray-50">
-      <div className="container mx-auto px-4">
+    <section id="features" className="py-20 bg-muted/30">
+      <Container>
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 20 }}
@@ -81,13 +82,14 @@ const FeaturesSection = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium text-sm mb-4">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-primary/10 text-primary font-medium text-sm mb-4 border border-primary/20">
+            <Sparkles className="w-4 h-4 mr-2" />
             Powerful Features
-          </span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Everything You Need for School Reporting
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
             Our comprehensive suite of tools makes managing academic records and generating reports effortless.
           </p>
         </motion.div>
@@ -103,7 +105,7 @@ const FeaturesSection = () => {
             />
           ))}
         </div>
-      </div>
+      </Container>
     </section>
   );
 };
