@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { CheckCircle, AlertCircle, Clock, Folder, ChevronDown, ChevronUp, Download, Trash2, Loader2 } from "lucide-react";
 import ClassReportList from "./ClassReportList";
+import ReportCardModal from "./ReportCardModal";
 import { generateStudentReport, calculateSubjectPositions, calculateOverallPosition } from "./reportUtils";
 import JSZip from "jszip";
 import * as React from "react";
@@ -9,7 +10,6 @@ import * as ReactDOM from "react-dom/client";
 import ReportCardWithFullAnalysis from "./ReportCardWithFullAnalysis";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { showWarning, showError, confirmDelete, showSuccess, showInfo } from "../../services/modalService";
 
 // Report type used for PDF generation
 type Report = {
@@ -67,7 +67,6 @@ type ClassReport = {
 type Props = {
   school: any;
   classes: any[];
-  onOpenReportPreview?: (report: any, classId: string) => void;
 };
 
 // Helper function to save reports to localStorage with better organization
@@ -180,18 +179,17 @@ const loadReportsFromLocalStorage = (schoolId: string): ClassReport[] => {
   return [];
 };
 
-const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) => {
+const BatchReportGenerator = ({ school, classes }: Props) => {
   const [selectedClassId, setSelectedClassId] = useState("");
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear() + "/" + (new Date().getFullYear() + 1));
   const [term, setTerm] = useState("First Term");
   const [classReports, setClassReports] = useState<ClassReport[]>([]);
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [availableAcademicYears, setAvailableAcademicYears] = useState<string[]>([]);
   const [availableTerms, setAvailableTerms] = useState<string[]>([]);
   const [dataAvailable, setDataAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-
 
   // Load saved reports when component mounts
   useEffect(() => {
@@ -349,7 +347,7 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
 
   const handleGenerateBatchReports = async () => {
     if (!selectedClassId || !academicYear || !term) {
-      showWarning("Missing Selection", "Please select a class, academic year, and term.");
+      alert("Please select a class, academic year, and term.");
       return;
     }
 
@@ -520,57 +518,52 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
   };
 
   const viewReport = (report: Report) => {
-    if (onOpenReportPreview) {
-      onOpenReportPreview(report, expandedClass || '');
-    }
+    setSelectedReport(report);
   };
 
   const deleteReportGroup = (classId: string) => {
-    confirmDelete(
-      'Are you sure you want to delete this report group? This action cannot be undone.',
-      () => {
-        setClassReports(prevReports => {
-          // Find the report to be deleted to get its details
-          const reportToDelete = prevReports.find(report => report.classId === classId);
-          if (!reportToDelete) return prevReports;
+    if (window.confirm('Are you sure you want to delete this report group? This action cannot be undone.')) {
+      setClassReports(prevReports => {
+        // Find the report to be deleted to get its details
+        const reportToDelete = prevReports.find(report => report.classId === classId);
+        if (!reportToDelete) return prevReports;
 
-          // Filter out the deleted report
-          const updatedReports = prevReports.filter(report => report.classId !== classId);
-          
-          // Update localStorage with the updated reports
-          if (school?.id) {
-            // First, get the existing saved reports
-            const savedReports = localStorage.getItem(`reports_${school.id}`);
-            if (savedReports) {
-              try {
-                const reportGroups: ReportGroup[] = JSON.parse(savedReports);
-                // Filter out the deleted report group
-                const updatedGroups = reportGroups.filter(group => 
-                  !(group.classReport.classId === classId && 
-                    group.classReport.term === reportToDelete.term && 
-                    group.classReport.academicYear === reportToDelete.academicYear)
-                );
-                // Save back to localStorage
-                localStorage.setItem(`reports_${school.id}`, JSON.stringify(updatedGroups));
-              } catch (error) {
-                console.error('Error updating localStorage after deletion:', error);
-                // If parsing fails, just save the updated reports directly
-                saveReportsToLocalStorage(school.id, updatedReports);
-              }
-            } else {
+        // Filter out the deleted report
+        const updatedReports = prevReports.filter(report => report.classId !== classId);
+        
+        // Update localStorage with the updated reports
+        if (school?.id) {
+          // First, get the existing saved reports
+          const savedReports = localStorage.getItem(`reports_${school.id}`);
+          if (savedReports) {
+            try {
+              const reportGroups: ReportGroup[] = JSON.parse(savedReports);
+              // Filter out the deleted report group
+              const updatedGroups = reportGroups.filter(group => 
+                !(group.classReport.classId === classId && 
+                  group.classReport.term === reportToDelete.term && 
+                  group.classReport.academicYear === reportToDelete.academicYear)
+              );
+              // Save back to localStorage
+              localStorage.setItem(`reports_${school.id}`, JSON.stringify(updatedGroups));
+            } catch (error) {
+              console.error('Error updating localStorage after deletion:', error);
+              // If parsing fails, just save the updated reports directly
               saveReportsToLocalStorage(school.id, updatedReports);
             }
+          } else {
+            saveReportsToLocalStorage(school.id, updatedReports);
           }
-          
-          // If the deleted report was expanded, collapse it
-          if (expandedClass === classId) {
-            setExpandedClass(null);
-          }
-          
-          return updatedReports;
-        });
-      }
-    );
+        }
+        
+        // If the deleted report was expanded, collapse it
+        if (expandedClass === classId) {
+          setExpandedClass(null);
+        }
+        
+        return updatedReports;
+      });
+    }
   };
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
@@ -672,26 +665,24 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
       document.body.removeChild(link);
     } catch (error) {
       console.error('Error generating reports:', error);
-      showError('Generation Error', 'Error generating reports. Please try again.');
+      alert('Error generating reports. Please try again.');
     } finally {
       setIsGeneratingPdf(null);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="glass-card p-6 glass-slide-up">
-        <h3 className="text-lg font-medium text-text-glass-primary mb-4">Report Generation Settings</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="glass-slide-up" style={{ animationDelay: '0.1s' }}>
-            <label htmlFor="batchClass" className="block text-sm font-medium text-text-glass-primary mb-2">
+    <div className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label htmlFor="batchClass" className="block text-sm font-medium text-gray-700 mb-1">
             Select Class
           </label>
           <select
             id="batchClass"
             value={selectedClassId}
             onChange={handleClassChange}
-              className="glass-input"
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
           >
             <option value="">-- Select Class --</option>
             {classes.map((classItem: any) => (
@@ -702,8 +693,8 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
           </select>
         </div>
 
-          <div className="glass-slide-up" style={{ animationDelay: '0.2s' }}>
-            <label htmlFor="batchTerm" className="block text-sm font-medium text-text-glass-primary mb-2">
+        <div>
+          <label htmlFor="batchTerm" className="block text-sm font-medium text-gray-700 mb-1">
             Term/Semester
           </label>
           <select
@@ -711,7 +702,7 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
             value={term}
             onChange={handleTermChange}
             disabled={availableTerms.length === 0 || !selectedClassId}
-              className={`glass-input ${(availableTerms.length === 0 || !selectedClassId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${(availableTerms.length === 0 || !selectedClassId) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           >
             {availableTerms.length > 0 ? (
               availableTerms.map((t) => (
@@ -725,8 +716,8 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
           </select>
         </div>
 
-          <div className="glass-slide-up" style={{ animationDelay: '0.3s' }}>
-            <label htmlFor="batchAcademicYear" className="block text-sm font-medium text-text-glass-primary mb-2">
+        <div>
+          <label htmlFor="batchAcademicYear" className="block text-sm font-medium text-gray-700 mb-1">
             Academic Year
           </label>
           <select
@@ -734,7 +725,7 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
             value={academicYear}
             onChange={handleAcademicYearChange}
             disabled={availableAcademicYears.length === 0 || !selectedClassId}
-              className={`glass-input ${(availableAcademicYears.length === 0 || !selectedClassId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${(availableAcademicYears.length === 0 || !selectedClassId) ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           >
             {availableAcademicYears.length > 0 ? (
               availableAcademicYears.map((year) => (
@@ -746,62 +737,56 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
               <option value="">No academic years available</option>
             )}
           </select>
-          </div>
         </div>
       </div>
 
       {loading && (
-        <div className="glass-card p-4 text-center glass-fade-in">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto"></div>
-          <p className="mt-2 text-text-glass-secondary text-sm">Loading data...</p>
+        <div className="flex justify-center my-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
         </div>
       )}
 
       {selectedClassId && !loading && !dataAvailable && (
-        <div className="glass-alert glass-alert-warning">
-          <p className="text-text-glass-primary text-sm">
+        <div className="mb-4 p-3 bg-yellow-50 text-yellow-700 rounded-md">
           No data available for the selected term and academic year. Please select different criteria or upload data first.
-          </p>
         </div>
       )}
 
-      <div className="glass-card p-4 glass-slide-up" style={{ animationDelay: '0.4s' }}>
       <div className="flex justify-end">
         <button
           onClick={handleGenerateBatchReports}
           disabled={!selectedClassId || !dataAvailable || loading}
-            className={`glass-button ${!selectedClassId || !dataAvailable || loading ? 'glass-button-secondary opacity-50 cursor-not-allowed' : 'glass-button-primary'} flex items-center`}
+          className={`px-4 py-2 rounded-md flex items-center ${!selectedClassId || !dataAvailable || loading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
         >
           Generate Class Reports
         </button>
-        </div>
       </div>
 
       {classReports.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="mt-8">
           <h4 className="text-lg font-medium text-gray-900 mb-4">Generated Reports</h4>
           <div className="space-y-4">
-            {classReports.map((classReport, index) => (
-              <div key={classReport.classId} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:border-blue-200 hover:shadow-md transition-all duration-200">
+            {classReports.map((classReport) => (
+              <div key={classReport.classId} className="mb-4 overflow-hidden border rounded-lg">
                 <div 
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-200"
+                  className="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
                   onClick={() => toggleClassExpansion(classReport.classId)}
                 >
                   <div className="flex items-center">
                     <div className="mr-3">
                       {classReport.status === 'generating' ? (
-                        <Clock className="w-5 h-5 text-blue-400 animate-pulse" />
+                        <Clock className="w-5 h-5 text-blue-500 animate-pulse" />
                       ) : classReport.status === 'completed' ? (
-                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : classReport.status === 'error' ? (
-                        <AlertCircle className="w-5 h-5 text-red-400" />
+                        <AlertCircle className="w-5 h-5 text-red-500" />
                       ) : (
-                        <Folder className="w-5 h-5 text-gray-500" />
+                        <Folder className="w-5 h-5 text-gray-400" />
                       )}
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">{classReport.className}</h4>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-gray-500">
                         {classReport.status === 'generating' 
                           ? `Generating reports (${classReport.progress}%)` 
                           : classReport.status === 'completed'
@@ -821,11 +806,11 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
                             downloadAllReports(classReport.classId);
                           }}
                           disabled={isGeneratingPdf === classReport.classId}
-                          className={`${
+                          className={`px-3 py-1 text-xs text-white rounded flex items-center ${
                             isGeneratingPdf === classReport.classId 
-                              ? 'bg-gray-300 text-gray-500 opacity-50 cursor-not-allowed' 
-                              : 'bg-green-500 hover:bg-green-600 text-white'
-                          } px-3 py-1 text-xs flex items-center rounded transition-colors`}
+                              ? 'bg-green-400 cursor-not-allowed' 
+                              : 'bg-green-600 hover:bg-green-700'
+                          }`}
                           title="Download all reports as PDF"
                         >
                           {isGeneratingPdf === classReport.classId ? (
@@ -845,7 +830,7 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
                             e.stopPropagation();
                             deleteReportGroup(classReport.classId);
                           }}
-                          className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded transition-colors"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors"
                           title="Delete report group"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -853,9 +838,9 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
                       </div>
                     )}
                     {expandedClass === classReport.classId ? (
-                      <ChevronUp className="w-5 h-5 text-gray-500" />
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-500" />
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
                     )}
                   </div>
                 </div>
@@ -864,21 +849,19 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
                   <div className="px-4 py-2 border-t border-gray-200">
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                       <div
-                        className="bg-gradient-to-r from-blue-400 to-blue-600 h-2.5 rounded-full transition-all duration-300"
+                        className="bg-blue-600 h-2.5 rounded-full"
                         style={{ width: `${classReport.progress}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs text-gray-600 text-right">
+                    <p className="text-xs text-gray-500 text-right">
                       {classReport.progress}% complete
                     </p>
                   </div>
                 )}
                 
                 {classReport.status === 'error' && (
-                  <div className="p-4 border-t border-gray-200 bg-red-50 border-l-4 border-l-red-500">
-                    <p className="text-red-800 text-sm">
+                  <div className="p-4 border-t border-gray-200 bg-red-50 text-red-700 text-sm">
                     {classReport.error || 'An error occurred while generating reports.'}
-                    </p>
                   </div>
                 )}
                 
@@ -895,7 +878,13 @@ const BatchReportGenerator = ({ school, classes, onOpenReportPreview }: Props) =
         </div>
       )}
 
-
+      {selectedReport && (
+        <ReportCardModal 
+          report={selectedReport} 
+          onClose={() => setSelectedReport(null)}
+          classId={expandedClass || ''}
+        />
+      )}
     </div>
   );
 };
